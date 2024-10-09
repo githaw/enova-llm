@@ -338,10 +338,9 @@ func (w *Workload) buildDeployment() v1.Deployment {
 			},
 		},
 	}
-
+	volumes := make([]corev1.Volume, len(w.Spec.Volumes))
+	volumeMounts := make([]corev1.VolumeMount, len(w.Spec.Volumes))
 	if len(w.Spec.Volumes) > 0 {
-		volumes := make([]corev1.Volume, len(w.Spec.Volumes))
-		volumeMounts := make([]corev1.VolumeMount, len(w.Spec.Volumes))
 		for i, v := range w.Spec.Volumes {
 			volumes[i] = corev1.Volume{
 				VolumeSource: corev1.VolumeSource{
@@ -356,9 +355,24 @@ func (w *Workload) buildDeployment() v1.Deployment {
 				MountPath: v.MountPath,
 			}
 		}
-		deployment.Spec.Template.Spec.Volumes = volumes
-		deployment.Spec.Template.Spec.Containers[0].VolumeMounts = volumeMounts
 	}
+	// if will add shm by default
+	shmLimitSize := k8sresource.MustParse("1Gi")
+	volumes = append(volumes, corev1.Volume{
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{
+				Medium:    corev1.StorageMediumMemory,
+				SizeLimit: &shmLimitSize,
+			},
+		},
+		Name: "shm",
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "shm",
+		MountPath: "/dev/shm",
+	})
+	deployment.Spec.Template.Spec.Volumes = volumes
+	deployment.Spec.Template.Spec.Containers[0].VolumeMounts = volumeMounts
 	if len(w.Spec.NodeSelector) > 0 {
 		deployment.Spec.Template.Spec.NodeSelector = w.Spec.NodeSelector
 	}
@@ -396,7 +410,7 @@ func (w *Workload) buildService() corev1.Service {
 			Ports:    ports,
 		},
 	}
-	service.Name = w.Spec.Service.Name
+	service.Name = fmt.Sprintf("%s-svc", w.Spec.Name)
 	service.Namespace = w.Spec.Namespace
 	return service
 }
@@ -414,7 +428,7 @@ func (w *Workload) buildIngress() networkingv1.Ingress {
 			PathType: &pathType,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
-					Name: p.Backend.Service.Name,
+					Name: fmt.Sprintf("%s-svc", w.Spec.Name),
 					Port: networkingv1.ServiceBackendPort{
 						Number: p.Backend.Service.Port.Number,
 					},
@@ -469,7 +483,7 @@ func (w *Workload) buildCollector() (otalpha1.OpenTelemetryCollector, error) {
 		KafkaPassword    string
 		ClusterId        string
 	}{
-		EnovaServingName: w.Spec.Name,
+		EnovaServingName: fmt.Sprintf("%s-svc", w.Spec.Name),
 		KafkaBrokers:     formatBrokers(w.Spec.Collector.Kafka.Brokers),
 		KafkaUsername:    w.Spec.Collector.Kafka.Username,
 		KafkaPassword:    w.Spec.Collector.Kafka.Password,
@@ -493,6 +507,10 @@ func (w *Workload) buildCollector() (otalpha1.OpenTelemetryCollector, error) {
 	collector.Name = w.Spec.Name
 	collector.Namespace = w.Spec.Namespace
 	return collector, nil
+}
+
+func (w *Workload) GetDeployment() (*v1.Deployment, error) {
+	return w.K8sCli.K8sClient.AppsV1().Deployments(w.Spec.Namespace).Get(w.K8sCli.Ctx, w.Spec.Name, metav1.GetOptions{})
 }
 
 func (w *Workload) GetPodsList() (*corev1.PodList, error) {

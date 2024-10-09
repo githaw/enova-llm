@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
+
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/meta"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/queue"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/resource"
@@ -50,11 +52,6 @@ func (t *DetectResultManager) GetHistoricalAnomalyRecommendResult(task meta.Task
 	return ret
 }
 
-// StatusSyncer for EnovaServing CR status reconcile
-type StatusSyncer interface {
-	Sync(k8s.Workload) error
-}
-
 type MulticlusterScaler interface {
 	Scale(k8s.Workload) error
 }
@@ -66,7 +63,6 @@ type Detector struct {
 	TaskMap             map[string]*meta.DetectTask
 	DetectResultManager *DetectResultManager
 	stopped             bool
-	StatusSyncer        StatusSyncer
 	MulticlusterScaler  MulticlusterScaler
 }
 
@@ -82,7 +78,7 @@ func NewDetector(ch chan meta.TaskSpecInterface) *Detector {
 		},
 		PermCli: PerformanceDetectorCli{},
 		TaskMap: make(map[string]*meta.DetectTask),
-		Client:  resource.NewDockerResourcClient(),
+		Client:  resource.NewDockerResourceClient(),
 		DetectResultManager: &DetectResultManager{
 			RedisClient: redis.NewRedisClient(
 				config.GetEConfig().Redis.Addr, config.GetEConfig().Redis.Password, config.GetEConfig().Redis.Db,
@@ -92,10 +88,7 @@ func NewDetector(ch chan meta.TaskSpecInterface) *Detector {
 	}
 }
 
-func NewK8sDetector(
-	ch chan meta.TaskSpecInterface,
-	statusSyncer StatusSyncer,
-	multiclusterScaler MulticlusterScaler) *Detector {
+func NewK8sDetector(ch chan meta.TaskSpecInterface, multiclusterScaler MulticlusterScaler) *Detector {
 	// pub := zmq.ZmqPublisher{
 	// 	Host: config.GetEConfig().Zmq.Host,
 	// 	Port: config.GetEConfig().Zmq.Port,
@@ -114,7 +107,6 @@ func NewK8sDetector(
 			),
 		},
 		stopped:            false,
-		StatusSyncer:       statusSyncer,
 		MulticlusterScaler: multiclusterScaler,
 	}
 }
@@ -231,22 +223,13 @@ func (d *Detector) DetectOnce() {
 				d.DetectOneTaskSpec(taskName, task.TaskSpec)
 			}
 		}
-		if config.GetEConfig().ResourceBackend.Type == config.ResourceBackendTypeK8s && d.StatusSyncer != nil {
-			k8sClient := d.Client.(*resource.K8sResourceClient)
-			if err := d.StatusSyncer.Sync(k8s.Workload{
-				K8sCli: k8sClient.K8sCli,
-				Spec:   task.TaskSpec.(*meta.TaskSpec),
-			}); err != nil {
-				logger.Errorf("MulticlusterStatusSyncer.Sync error: %v", err)
-			}
-		}
 	}
 }
 
 func (d *Detector) IsTaskExisted(task meta.TaskSpecInterface) bool {
+	// check whether deployment is existed
 	t := task.(*meta.TaskSpec)
-	rtInfos := d.Client.GetRuntimeInfos(*t)
-	return len(rtInfos) > 0
+	return d.Client.IsTaskExist(*t)
 }
 
 // IsTaskRunning TODO: add GetTaskMap
@@ -256,11 +239,20 @@ func (d *Detector) IsTaskRunning(taskName string, task meta.TaskSpecInterface) b
 		d.TaskMap[taskName].Status = meta.TaskStatusRunning
 		return true
 	}
-	containerInfos := d.Client.GetRuntimeInfos(*t)
-	for _, containerInfo := range containerInfos {
-		if containerInfo.Status == "exited" {
-			d.TaskMap[taskName].Status = meta.TaskStatusError
-			return false
+	runtimeInfos := d.Client.GetRuntimeInfos(*t)
+	if runtimeInfos.Source == meta.DockerSource {
+		for _, container := range *runtimeInfos.Containers {
+			if container.State.Status == "exited" {
+				d.TaskMap[taskName].Status = meta.TaskStatusError
+				return false
+			}
+		}
+	} else if runtimeInfos.Source == meta.K8sSource {
+		for _, pod := range runtimeInfos.PodList.Items {
+			if pod.Status.Phase == v1.PodFailed {
+				d.TaskMap[taskName].Status = meta.TaskStatusError
+				return false
+			}
 		}
 	}
 	d.TaskMap[taskName].Status = meta.TaskStatusScheduling
@@ -273,7 +265,7 @@ func (d *Detector) UpdateTaskSpec(task meta.TaskSpecInterface, resp api.ConfigRe
 }
 
 func (d *Detector) RunDetector() {
-	ticker := time.NewTicker(time.Duration(time.Duration(config.GetEConfig().Detector.DetectInterval) * time.Second))
+	ticker := time.NewTicker(time.Duration(config.GetEConfig().Detector.DetectInterval) * time.Second)
 	for {
 		if d.stopped {
 			break

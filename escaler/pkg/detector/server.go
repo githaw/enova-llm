@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	v1 "k8s.io/api/core/v1"
+
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/meta"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/api"
@@ -20,14 +22,10 @@ type DetectorServer struct {
 	server   *server.APIServer
 }
 
-func NewDetectorServer(
-	ch chan meta.TaskSpecInterface,
-	statusSyncer StatusSyncer,
-	multiclusterScaler MulticlusterScaler) *DetectorServer {
-
+func NewDetectorServer(ch chan meta.TaskSpecInterface, multiclusterScaler MulticlusterScaler) *DetectorServer {
 	detectorServer := DetectorServer{}
 	if config.GetEConfig().ResourceBackend.Type == config.ResourceBackendTypeK8s {
-		detector := NewK8sDetector(ch, statusSyncer, multiclusterScaler)
+		detector := NewK8sDetector(ch, multiclusterScaler)
 		detectorServer.Detector = detector
 	} else {
 		detector := NewDetector(ch)
@@ -167,18 +165,25 @@ func (r DeployResource) Get(c *gin.Context) {
 		r.SetErrorResult(c, fmt.Errorf("taskName: %s, can not be found", taskName))
 	} else {
 		taskSpec := detectTask.TaskSpec.(*meta.TaskSpec)
-		containerInfos := r.Detector.Client.GetRuntimeInfos(*taskSpec)
-
-		// compute current detect task status
-		for _, containerInfo := range containerInfos {
-			if containerInfo.Status == "running" {
-				detectTask.Status = meta.TaskStatusRunning
+		runtimeInfos := r.Detector.Client.GetRuntimeInfos(*taskSpec)
+		if runtimeInfos.Source == meta.DockerSource {
+			for _, container := range *runtimeInfos.Containers {
+				if container.State.Status == "running" {
+					detectTask.Status = meta.TaskStatusRunning
+				}
+			}
+		} else if runtimeInfos.Source == meta.K8sSource {
+			for _, pod := range runtimeInfos.PodList.Items {
+				if pod.Status.Phase == v1.PodRunning {
+					detectTask.Status = meta.TaskStatusRunning
+				}
 			}
 		}
+
 		r.SetResult(c, meta.DetectTaskSpecResponse{
 			TaskSpec:       *taskSpec,
 			Status:         string(detectTask.Status),
-			ContainerInfos: containerInfos,
+			ContainerInfos: *runtimeInfos,
 		})
 	}
 }

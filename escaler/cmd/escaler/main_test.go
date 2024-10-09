@@ -42,7 +42,7 @@ func TestK8sEnovaServing(t *testing.T) {
 	performaceCli := detector.PerformanceDetectorCli{}
 
 	ch := make(chan meta.TaskSpecInterface)
-	d := detector.NewDetectorServer(ch, &TestSyncer{}, nil)
+	d := detector.NewDetectorServer(ch, nil)
 	s := scaler.NewServingScaler(ch)
 
 	wg.Add(2)
@@ -218,7 +218,7 @@ func TestPilot(t *testing.T) {
 	performaceCli := detector.PerformanceDetectorCli{}
 
 	ch := make(chan meta.TaskSpecInterface)
-	d := detector.NewDetectorServer(ch, nil, nil)
+	d := detector.NewDetectorServer(ch, nil)
 	s := scaler.NewLocalDockerServingScaler(ch)
 
 	wg.Add(2)

@@ -3,6 +3,11 @@ package resource
 import (
 	"context"
 
+	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/logger"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/meta"
@@ -37,6 +42,23 @@ func (c *K8sResourceClient) DeleteTask(spec meta.TaskSpec) {
 	workload.Delete()
 }
 
+func (c *K8sResourceClient) IsTaskExist(spec meta.TaskSpec) bool {
+	workload := k8s.Workload{
+		K8sCli: c.K8sCli,
+		Spec:   &spec,
+	}
+	_, err := workload.GetDeployment()
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false
+		} else {
+			logger.Errorf("K8sResourceClient get ENOVA error: %v", err)
+			return false
+		}
+	}
+	return true
+}
+
 func (c *K8sResourceClient) IsTaskRunning(spec meta.TaskSpec) bool {
 	workload := k8s.Workload{
 		K8sCli: c.K8sCli,
@@ -53,33 +75,29 @@ func (c *K8sResourceClient) IsTaskRunning(spec meta.TaskSpec) bool {
 	return false
 }
 
-func (c *K8sResourceClient) GetRuntimeInfos(spec meta.TaskSpec) []meta.RuntimeInfo {
+func (c *K8sResourceClient) GetRuntimeInfos(spec meta.TaskSpec) *meta.RuntimeInfo {
 	workload := k8s.Workload{
 		K8sCli: c.K8sCli,
 		Spec:   &spec,
 	}
+	ret := &meta.RuntimeInfo{Source: meta.K8sSource, Deployment: &v1.Deployment{}, PodList: &corev1.PodList{}}
+	dp, err := workload.GetDeployment()
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			logger.Errorf("GetRuntimeInfos GetPodsList error: %v", err)
+		}
+		return ret
+	}
+	ret.Deployment = dp
 	podList, err := workload.GetPodsList()
 	if err != nil {
-		logger.Errorf("GetRuntimeInfos GetPodsList error: %v", err)
-		return []meta.RuntimeInfo{}
-	}
-	if len(podList.Items) == 0 {
-		return []meta.RuntimeInfo{}
-	}
-	ret := make([]meta.RuntimeInfo, len(podList.Items))
-	for i, pod := range podList.Items {
-		ret[i] = meta.RuntimeInfo{
-			ContainerId: pod.Name,
-			Name:        pod.Name,
-			Status:      string(pod.Status.Phase),
+		if !apierrors.IsNotFound(err) {
+			logger.Errorf("GetRuntimeInfos GetPodsList error: %v", err)
 		}
+		return ret
 	}
+	ret.PodList = podList
 	return ret
-}
-
-// SyncStatus sync node relation to
-func (c *K8sResourceClient) SyncStatus(spec meta.TaskSpec) {
-
 }
 
 func NewK8sClient() (*kubernetes.Clientset, error) {
