@@ -12,6 +12,7 @@ import (
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/detector"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/meta"
+	"github.com/Emerging-AI/ENOVA/escaler/pkg/resource/k8s"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/scaler"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/api"
@@ -25,8 +26,8 @@ import (
 type TestSyncer struct {
 }
 
-func (s *TestSyncer) Sync(task meta.TaskSpecInterface) error {
-	logger.Infof("TestSyncer Sync, task Name: %s", task.GetName())
+func (s *TestSyncer) Sync(workload k8s.Workload) error {
+	logger.Infof("TestSyncer Sync, task Name: %s", workload.Spec.GetName())
 	return nil
 }
 
@@ -134,7 +135,13 @@ func TestK8sEnovaServing(t *testing.T) {
 			Strategy: meta.StrategyManual,
 		},
 		Collector: meta.CollectorConfig{
-			Enable: true,
+			Enable:    true,
+			ClusterId: "",
+			Kafka: meta.KafkaConfig{
+				Brokers:  []string{},
+				Username: "",
+				Password: "",
+			},
 		},
 	}
 

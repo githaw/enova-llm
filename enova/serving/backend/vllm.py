@@ -4,6 +4,7 @@ from enova.common.logger import LOGGER
 from enova.common.config import CONFIG
 from enova.common.constant import VllmMode
 from enova.serving.backend.base import BaseBackend
+from enova.serving.middlewares.cors import WSCORSMiddleware
 
 
 @dataclasses.dataclass
@@ -78,6 +79,13 @@ class VllmBackend(BaseBackend):
         LOGGER.info(f"CONFIG.vllm: {CONFIG.vllm}")
 
         self.app = api_server.app
+        self.app.add_middleware(
+            WSCORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
         cur_app = api_server.app
 
         @cur_app.get("/v1/model/info/args")
