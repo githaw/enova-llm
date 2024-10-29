@@ -146,23 +146,26 @@ type KafkaConfig struct {
 }
 
 type CollectorConfig struct {
-	Enable    bool
-	ClusterId string
-	Kafka     KafkaConfig
+	Enable           bool
+	ClusterId        string
+	Kafka            KafkaConfig
+	CustomMetricsAdd map[string]string
 }
 
 type TaskSpec struct {
-	Name                string
-	Model               string
-	Host                string
-	Port                int
-	Image               string
-	Backend             string
-	ExporterEndpoint    string `json:"exporter_endpoint"`
-	ExporterServiceName string `json:"exporter_service_name"`
-	ModelConfig         ModelConfig
-	BackendConfig       BackendConfig
+	Name                string            `json:"name"`
+	Model               string            `json:"model"`
+	Host                string            `json:"host"`
+	Port                int               `json:"port"`
+	Image               string            `json:"image"`
+	Backend             string            `json:"backend"`
+	ExporterEndpoint    string            `json:"exporter_endpoint"`
+	ExporterServiceName string            `json:"exporter_service_name"`
+	ModelConfig         ModelConfig       `json:"model_config"`
+	BackendConfig       BackendConfig     `json:"backend_config"`
 	BackendExtraConfig  map[string]string `json:"backend_extra_config"`
+	Command             []string          `json:"command"`
+	Args                []string          `json:"args"`
 	Replica             int               `json:"replica"`
 	Envs                []Env             `json:"envs"`
 	Gpus                string            `json:"gpus"`
@@ -220,18 +223,20 @@ func (t *TaskSpec) GetPreferGpuNum() int {
 
 func (t *TaskSpec) UnmarshalJSON(data []byte) error {
 	type Alias struct {
-		Name                string
-		Model               string
-		Host                string
-		Port                int
-		Backend             string
-		Image               string
-		ExporterEndpoint    string `json:"exporter_endpoint"`
-		ExporterServiceName string `json:"exporter_service_name"`
-		ModelConfig         ModelConfig
-		Replica             int `json:"replica"`
-		BackendConfig       json.RawMessage
+		Name                string            `json:"name"`
+		Model               string            `json:"model"`
+		Host                string            `json:"host"`
+		Port                int               `json:"port"`
+		Backend             string            `json:"backend"`
+		Image               string            `json:"image"`
+		ExporterEndpoint    string            `json:"exporter_endpoint"`
+		ExporterServiceName string            `json:"exporter_service_name"`
+		ModelConfig         ModelConfig       `json:"model_config"`
+		Replica             int               `json:"replica"`
+		BackendConfig       json.RawMessage   `json:"backend_config"`
 		BackendExtraConfig  map[string]string `json:"backend_extra_config"`
+		Command             []string          `json:"command"`
+		Args                []string          `json:"args"`
 		Envs                []Env             `json:"envs"`
 		Gpus                string            `json:"gpus"`
 		Volumes             []Volume          `json:"volumes"`
@@ -272,6 +277,8 @@ func (t *TaskSpec) UnmarshalJSON(data []byte) error {
 		Replica:             aux.Replica,
 		BackendConfig:       backendConfig,
 		BackendExtraConfig:  aux.BackendExtraConfig,
+		Command:             aux.Command,
+		Args:                aux.Args,
 		Envs:                aux.Envs,
 		Gpus:                aux.Gpus,
 		Volumes:             aux.Volumes,

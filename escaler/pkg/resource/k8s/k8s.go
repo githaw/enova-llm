@@ -3,12 +3,11 @@ package k8s
 import (
 	"context"
 	"fmt"
-
+	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/logger"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/meta"
-	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 
 	v1 "k8s.io/api/apps/v1"
@@ -86,7 +85,7 @@ func (w *Workload) CreateOrUpdate() {
 		}
 	}
 
-	if w.Spec.Collector.Enable {
+	if w.Spec.Collector.Enable && !w.isCustomized() {
 		_, err = w.GetCollector()
 		if err != nil {
 			_, err = w.CreateCollector()
@@ -234,7 +233,13 @@ func (w *Workload) buildDeployment() v1.Deployment {
 	replicas := int32(w.Spec.Replica)
 	matchLabels := make(map[string]string)
 	matchLabels["enovaserving-name"] = w.Spec.Name
-	cmd := rscutils.BuildCmdFromTaskSpec(*w.Spec)
+	cmd := make([]string, 0)
+	if len(w.Spec.Command) > 0 {
+		cmd = append(cmd, w.Spec.Command...)
+		cmd = append(cmd, w.Spec.Args...)
+	} else {
+		cmd = rscutils.BuildCmdFromTaskSpec(*w.Spec)
+	}
 
 	env := make([]corev1.EnvVar, len(w.Spec.Envs))
 	for i, e := range w.Spec.Envs {
@@ -248,7 +253,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 	readinessProbe := corev1.Probe{}
 	probe := corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/metrics",
 		Port: intstr.IntOrString{IntVal: int32(w.Spec.Port)}}}, InitialDelaySeconds: 30}
-	if w.Spec.Backend == "vllm" {
+	if w.Spec.Backend == "vllm" && !w.isCustomized() {
 		livenessProbe = probe
 		livenessProbe.FailureThreshold = 600
 		readinessProbe = probe
@@ -422,16 +427,27 @@ func formatBrokers(brokers []string) string {
 }
 
 func (w *Workload) buildCollector() otalv1.OpenTelemetryCollector {
+	actions := []interface{}{
+		map[string]interface{}{
+			"key":    "cluster_id",
+			"action": "insert",
+			"value":  w.Spec.Collector.ClusterId,
+		},
+	}
+
+	if len(w.Spec.Collector.CustomMetricsAdd) > 0 {
+		for k, v := range w.Spec.Collector.CustomMetricsAdd {
+			actions = append(actions, map[string]interface{}{
+				"key":    k,
+				"action": "insert",
+				"value":  v,
+			})
+		}
+	}
 	processors := otalv1.AnyConfig{Object: map[string]interface{}{
 		"batch": map[string]interface{}{},
 		"attributes/metrics": map[string]interface{}{
-			"actions": []interface{}{
-				map[string]interface{}{
-					"key":    "cluster_id",
-					"action": "insert",
-					"value":  w.Spec.Collector.ClusterId,
-				},
-			},
+			"actions": actions,
 		},
 		"attributes/http": map[string]interface{}{
 			"actions": []interface{}{
@@ -626,4 +642,8 @@ func (w *Workload) GetOtCollectorResource() dynamic.NamespaceableResourceInterfa
 		Resource: "opentelemetrycollectors",
 	}
 	return w.K8sCli.DynamicClient.Resource(gvr)
+}
+
+func (w *Workload) isCustomized() bool {
+	return len(w.Spec.Command) > 0
 }
