@@ -256,10 +256,12 @@ func (w *Workload) buildDeployment() v1.Deployment {
 	if w.Spec.Backend == "vllm" && !w.isCustomized() {
 		livenessProbe = probe
 		livenessProbe.FailureThreshold = 3
-		livenessProbe.InitialDelaySeconds = 600
+		livenessProbe.InitialDelaySeconds = 60
+		livenessProbe.TimeoutSeconds = 5
 		readinessProbe = probe
 		readinessProbe.FailureThreshold = 3
-		readinessProbe.InitialDelaySeconds = 600
+		readinessProbe.InitialDelaySeconds = 60
+		readinessProbe.TimeoutSeconds = 5
 	}
 
 	// default mount ~/.cache to host data disk
