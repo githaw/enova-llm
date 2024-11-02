@@ -251,7 +251,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 
 	livenessProbe := corev1.Probe{}
 	readinessProbe := corev1.Probe{}
-	probe := corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/metrics",
+	probe := corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/health",
 		Port: intstr.IntOrString{IntVal: int32(w.Spec.Port)}}}, InitialDelaySeconds: 30}
 	if w.Spec.Backend == "vllm" && !w.isCustomized() {
 		livenessProbe = probe
