@@ -255,8 +255,11 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		Port: intstr.IntOrString{IntVal: int32(w.Spec.Port)}}}, InitialDelaySeconds: 30}
 	if w.Spec.Backend == "vllm" && !w.isCustomized() {
 		livenessProbe = probe
-		livenessProbe.FailureThreshold = 600
+		livenessProbe.FailureThreshold = 3
+		livenessProbe.InitialDelaySeconds = 600
 		readinessProbe = probe
+		readinessProbe.FailureThreshold = 3
+		readinessProbe.InitialDelaySeconds = 600
 	}
 
 	// default mount ~/.cache to host data disk
