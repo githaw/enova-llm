@@ -69,6 +69,7 @@ class VllmBackend(BaseBackend):
                 return_tokens_as_token_ids=CONFIG.vllm.get("return_tokens_as_token_ids") or False,
             )
             api_server.engine = engine
+            api_server.async_engine_client = engine
             api_server.engine_args = engine_args
             api_server.openai_serving_chat = openai_serving_chat
             api_server.openai_serving_completion = openai_serving_completion
