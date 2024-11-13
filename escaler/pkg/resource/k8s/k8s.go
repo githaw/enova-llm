@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+
 	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 

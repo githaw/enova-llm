@@ -100,7 +100,7 @@ func NewK8sDetector(ch chan meta.TaskSpecInterface, multiclusterScaler Multiclus
 		},
 		PermCli: PerformanceDetectorCli{},
 		TaskMap: make(map[string]*meta.DetectTask),
-		Client:  resource.Newk8sResourcClient(),
+		Client:  resource.NewK8sResourceClient(),
 		DetectResultManager: &DetectResultManager{
 			RedisClient: redis.NewRedisClient(
 				config.GetEConfig().Redis.Addr, config.GetEConfig().Redis.Password, config.GetEConfig().Redis.Db,

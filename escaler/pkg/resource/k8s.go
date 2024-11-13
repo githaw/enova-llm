@@ -102,33 +102,33 @@ func (c *K8sResourceClient) GetRuntimeInfos(spec meta.TaskSpec) *meta.RuntimeInf
 
 func NewK8sClient() (*kubernetes.Clientset, error) {
 	if config.GetEConfig().K8s.InCluster {
-		config, err := rest.InClusterConfig()
+		conf, err := rest.InClusterConfig()
 		if err != nil {
 		}
-		return kubernetes.NewForConfig(config)
+		return kubernetes.NewForConfig(conf)
 	}
-	config, err := clientcmd.BuildConfigFromFlags("", config.GetEConfig().K8s.KubeConfigPath)
+	conf, err := clientcmd.BuildConfigFromFlags("", config.GetEConfig().K8s.KubeConfigPath)
 	if err != nil {
 	}
 
-	return kubernetes.NewForConfig(config)
+	return kubernetes.NewForConfig(conf)
 }
 
 func NewK8sDynamicClient() (*dynamic.DynamicClient, error) {
 	if config.GetEConfig().K8s.InCluster {
-		config, err := rest.InClusterConfig()
+		conf, err := rest.InClusterConfig()
 		if err != nil {
 		}
-		return dynamic.NewForConfig(config)
+		return dynamic.NewForConfig(conf)
 	}
-	config, err := clientcmd.BuildConfigFromFlags("", config.GetEConfig().K8s.KubeConfigPath)
+	conf, err := clientcmd.BuildConfigFromFlags("", config.GetEConfig().K8s.KubeConfigPath)
 	if err != nil {
 	}
 
-	return dynamic.NewForConfig(config)
+	return dynamic.NewForConfig(conf)
 }
 
-func Newk8sResourcClient() *K8sResourceClient {
+func NewK8sResourceClient() *K8sResourceClient {
 	cli, err := NewK8sClient()
 	if err != nil {
 		panic(err)
