@@ -61,7 +61,7 @@ class Config:
 
     # defualt value of whole service
     default_map = {
-        "pkg": {"version": "0.0.7"},
+        "pkg": {"version": "0.0.8"},
         "app_name": "",
         "api": {
             "docs_url": "/api/docs",
@@ -115,6 +115,10 @@ class Config:
         "vllm": {
             "tensor_parallel_size": 1,
             "vllm_mode": "normal",
+            "trust_remote_code": True,
+        },
+        "sglang": {
+            "tensor_parallel_size": 1,
             "trust_remote_code": True,
         },
         "deploy": {
