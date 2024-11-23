@@ -229,6 +229,10 @@ func (d *DockerResourceClient) createSingleServing(spec meta.TaskSpec, container
 	return d.DockerClient.CreateContainer(params)
 }
 
+func (d *DockerResourceClient) InPlaceRestart(spec meta.TaskSpec) bool {
+	return true
+}
+
 func buildDockerEnvs(envs []meta.Env) []string {
 	ret := []string{}
 	for _, e := range envs {

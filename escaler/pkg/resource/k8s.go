@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"strings"
 
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -98,6 +99,31 @@ func (c *K8sResourceClient) GetRuntimeInfos(spec meta.TaskSpec) *meta.RuntimeInf
 	}
 	ret.PodList = podList
 	return ret
+}
+
+func (c *K8sResourceClient) InPlaceRestart(spec meta.TaskSpec) bool {
+	workload := k8s.Workload{
+		K8sCli: c.K8sCli,
+		Spec:   &spec,
+	}
+	podList, err := workload.GetPodsList()
+	if err != nil {
+		logger.Errorf("GetRuntimeInfos GetPodsList error: %v", err)
+		return false
+	}
+
+	for _, pod := range podList.Items {
+		for _, container := range pod.Spec.Containers {
+			if !strings.Contains(container.Name, "istio") {
+				if err := workload.InPlaceRestart(pod.Name, container.Name); err != nil {
+					logger.Errorf("restart container error: %v", err)
+					return false
+				}
+			}
+		}
+	}
+
+	return true
 }
 
 func NewK8sClient() (*kubernetes.Clientset, error) {
