@@ -1,5 +1,6 @@
 httpx==0.24.1
 fastapi==0.108.0
+vllm==0.6.3.post1
 huggingface_hub
 hf-transfer
 transformers
@@ -27,6 +28,12 @@ openai
 packaging
 ray
 python-multipart
+# msgspec
+# compressed_tensors
+# gguf
+# sentencepiece
+# mistral_common
+
 # filelock
 # lm-format-enforcer==0.10.3
 # ninja

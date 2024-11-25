@@ -1,7 +1,5 @@
 FROM emergingai/enova:base
 
-RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple && pip install pip setuptools setuptools_scm[toml]==7.1.0 toml poetry
-
 COPY ./llmo /opt/enova/llmo
 
 COPY ./scripts /opt/enova/scripts
@@ -18,5 +16,5 @@ COPY . /opt/enova
 RUN cd /opt/enova && bash ./scripts/pack_whl.enova.sh
 ARG ENOVA_VERSION=0.0.8
 
-RUN pip install /opt/enova/dist/enova-${ENOVA_VERSION}-py3-none-any.whl --no-cache-dir && \
+RUN pip install /opt/enova/dist/enova-${ENOVA_VERSION}-py3-none-any.whl --no-deps --no-cache-dir && \
     pip uninstall -y transformer-engine && mkdir -p /workspace/model
