@@ -1,5 +1,4 @@
 httpx==0.24.1
-vllm==0.6.3
 fastapi==0.108.0
 huggingface_hub
 hf-transfer
@@ -27,6 +26,7 @@ tzlocal
 openai
 packaging
 ray
+python-multipart
 # filelock
 # lm-format-enforcer==0.10.3
 # ninja

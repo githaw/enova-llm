@@ -9,8 +9,7 @@ COPY ./scripts /opt/enova/scripts
 RUN bash /opt/enova/scripts/pack_whl.llmo.sh 
 
 ARG LLMO_VERSION=0.0.8
-RUN pip install -r /opt/enova/requirements.txt && \
-    pip install /opt/enova/llmo/enova-instrumentation-llmo/dist/enova_instrumentation_llmo-${LLMO_VERSION}-py3-none-any.whl --no-deps
+RUN pip install /opt/enova/llmo/enova-instrumentation-llmo/dist/enova_instrumentation_llmo-${LLMO_VERSION}-py3-none-any.whl --no-deps --no-cache-dir
 
 ARG CACHEBUST=1
 
@@ -19,5 +18,5 @@ COPY . /opt/enova
 RUN cd /opt/enova && bash ./scripts/pack_whl.enova.sh
 ARG ENOVA_VERSION=0.0.8
 
-RUN pip install /opt/enova/dist/enova-${ENOVA_VERSION}-py3-none-any.whl && \
+RUN pip install /opt/enova/dist/enova-${ENOVA_VERSION}-py3-none-any.whl --no-cache-dir && \
     pip uninstall -y transformer-engine && mkdir -p /workspace/model
