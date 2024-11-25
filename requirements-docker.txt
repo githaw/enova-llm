@@ -1,5 +1,5 @@
 httpx==0.24.1
-vllm==0.6.0
+vllm==0.6.3
 fastapi==0.108.0
 huggingface_hub
 hf-transfer

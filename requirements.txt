@@ -29,3 +29,5 @@ ray
 enova-instrumentation-llmo==0.0.8
 addict
 sglang==0.3.6
+flashinfer
+python-multipart

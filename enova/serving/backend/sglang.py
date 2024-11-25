@@ -8,7 +8,6 @@ from enova.serving.backend.base import BaseBackend
 class SglangBackend(BaseBackend):
     def __post_init__(self):
         """Initialize the SglangBackend specific components."""
-        self._create_app()
 
     def _create_app(self):
         from sglang.srt.server import app as sglang_app, launch_engine
@@ -16,12 +15,12 @@ class SglangBackend(BaseBackend):
         from sglang.srt.utils import add_prometheus_middleware
         from sglang.srt.metrics.func_timer import enable_func_timer
 
-        if not hasattr(self, 'model'):
+        if not hasattr(self, "model"):
             raise RuntimeError("Model path must be specified")
 
-        if 'tensor_parallel_size' in CONFIG.sglang:
-            CONFIG.sglang['tp_size'] = CONFIG.sglang.pop('tensor_parallel_size')
-        server_args = ServerArgs(model_path=self.model, **CONFIG.sglang)
+        if "tensor_parallel_size" in CONFIG.sglang:
+            CONFIG.sglang["tp_size"] = CONFIG.sglang.pop("tensor_parallel_size")
+        server_args = ServerArgs(host=CONFIG.serving["host"], port=CONFIG.serving["port"], model_path=self.model, **CONFIG.sglang)
         launch_engine(server_args)
         add_prometheus_middleware(sglang_app)
         enable_func_timer()
