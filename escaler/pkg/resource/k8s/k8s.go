@@ -3,12 +3,13 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log"
+	"net/http"
+
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
-	"log"
-	"net/http"
 
 	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -478,6 +479,21 @@ func (w *Workload) buildCollector() otalv1.OpenTelemetryCollector {
 	},
 	}
 
+	serviceProcessors := []string{"attributes/metrics", "attributes/http", "batch"}
+	if w.Spec.Backend == "sglang" {
+		processors.Object["metricstransform"] = map[string]interface{}{
+			"transforms": []interface{}{
+				map[string]interface{}{
+					"action":     "update",
+					"include":    "^sglang:(.*)$$",
+					"match_type": "regexp",
+					"new_name":   "vllm:$${1}]",
+				},
+			},
+		}
+		serviceProcessors = []string{"attributes/metrics", "attributes/http", "metricstransform", "batch"}
+	}
+
 	service := otalv1.Service{
 		Extensions: nil,
 		Telemetry:  nil,
@@ -489,7 +505,7 @@ func (w *Workload) buildCollector() otalv1.OpenTelemetryCollector {
 			},
 			"metrics": {
 				Receivers:  []string{"prometheus", "otlp"},
-				Processors: []string{"attributes/metrics", "attributes/http", "batch"},
+				Processors: serviceProcessors,
 				Exporters:  []string{"kafka"},
 			},
 		},
