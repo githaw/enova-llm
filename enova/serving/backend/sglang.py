@@ -24,6 +24,7 @@ class SglangBackend(BaseBackend):
         server_args = ServerArgs(host=CONFIG.serving["host"], port=CONFIG.serving["port"], model_path=self.model, **CONFIG.sglang)
         launch_engine(server_args)
         set_prometheus_multiproc_dir()
+        os.makedirs(os.environ["PROMETHEUS_MULTIPROC_DIR"])
         add_prometheus_middleware(sglang_app)
         enable_func_timer()
 
