@@ -263,15 +263,18 @@ func (w *Workload) buildDeployment() v1.Deployment {
 	readinessProbe := corev1.Probe{}
 	probe := corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/health",
 		Port: intstr.IntOrString{IntVal: int32(w.Spec.Port)}}}, InitialDelaySeconds: 30}
-	if w.Spec.Backend == "vllm" && !w.isCustomized() {
-		livenessProbe = probe
-		livenessProbe.FailureThreshold = 3
-		livenessProbe.InitialDelaySeconds = 60
-		livenessProbe.TimeoutSeconds = 5
-		readinessProbe = probe
-		readinessProbe.FailureThreshold = 3
-		readinessProbe.InitialDelaySeconds = 60
-		readinessProbe.TimeoutSeconds = 5
+	switch w.Spec.Backend {
+	case "vllm", "sglang":
+		if !w.isCustomized() {
+			livenessProbe = probe
+			livenessProbe.FailureThreshold = 3
+			livenessProbe.InitialDelaySeconds = 60
+			livenessProbe.TimeoutSeconds = 5
+			readinessProbe = probe
+			readinessProbe.FailureThreshold = 3
+			readinessProbe.InitialDelaySeconds = 60
+			readinessProbe.TimeoutSeconds = 5
+		}
 	}
 
 	// default mount ~/.cache to host data disk
