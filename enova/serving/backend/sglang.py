@@ -1,4 +1,5 @@
 import dataclasses
+import os
 from enova.common.logger import LOGGER
 from enova.common.config import CONFIG
 from enova.serving.backend.base import BaseBackend
@@ -12,7 +13,7 @@ class SglangBackend(BaseBackend):
     def _create_app(self):
         from sglang.srt.server import app as sglang_app, launch_engine
         from sglang.srt.server_args import ServerArgs
-        from sglang.srt.utils import add_prometheus_middleware
+        from sglang.srt.utils import add_prometheus_middleware, set_prometheus_multiproc_dir
         from sglang.srt.metrics.func_timer import enable_func_timer
 
         if not hasattr(self, "model"):
@@ -22,6 +23,7 @@ class SglangBackend(BaseBackend):
             CONFIG.sglang["tp_size"] = CONFIG.sglang.pop("tensor_parallel_size")
         server_args = ServerArgs(host=CONFIG.serving["host"], port=CONFIG.serving["port"], model_path=self.model, **CONFIG.sglang)
         launch_engine(server_args)
+        set_prometheus_multiproc_dir()
         add_prometheus_middleware(sglang_app)
         enable_func_timer()
 

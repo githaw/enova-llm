@@ -120,6 +120,7 @@ class Config:
         "sglang": {
             "tensor_parallel_size": 1,
             "trust_remote_code": True,
+            "enable_metrics": True,
         },
         "deploy": {
             "docker_compose_exce": "template/deployment/docker-compose/bin/docker-compose-linux-x86_64",

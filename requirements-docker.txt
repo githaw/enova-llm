@@ -1,6 +1,7 @@
 httpx==0.24.1
 fastapi==0.108.0
 vllm==0.6.3.post1
+sglang==0.3.6
 huggingface_hub
 hf-transfer
 transformers
@@ -28,6 +29,9 @@ openai
 packaging
 ray
 python-multipart
+addict
+orjson
+siphash24
 # msgspec
 # compressed_tensors
 # gguf

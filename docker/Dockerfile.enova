@@ -16,5 +16,6 @@ COPY . /opt/enova
 RUN cd /opt/enova && bash ./scripts/pack_whl.enova.sh
 ARG ENOVA_VERSION=0.0.8
 
-RUN pip install /opt/enova/dist/enova-${ENOVA_VERSION}-py3-none-any.whl --no-deps --no-cache-dir && \
+RUN pip install -r /opt/enova/requirements.txt --no-deps  --no-cache-dir && \
+    pip install /opt/enova/dist/enova-${ENOVA_VERSION}-py3-none-any.whl --no-deps --no-cache-dir && \
     pip uninstall -y transformer-engine && mkdir -p /workspace/model
