@@ -100,7 +100,7 @@ func NewK8sDetector(ch chan meta.TaskSpecInterface, multiclusterScaler Multiclus
 		},
 		PermCli: PerformanceDetectorCli{},
 		TaskMap: make(map[string]*meta.DetectTask),
-		Client:  resource.Newk8sResourcClient(),
+		Client:  resource.NewK8sResourceClient(),
 		DetectResultManager: &DetectResultManager{
 			RedisClient: redis.NewRedisClient(
 				config.GetEConfig().Redis.Addr, config.GetEConfig().Redis.Password, config.GetEConfig().Redis.Db,
@@ -216,7 +216,7 @@ func (d *Detector) DetectOneTaskSpec(taskName string, taskSpec meta.TaskSpecInte
 // DetectOnce Detect anomaly from remote
 // Sync Status to MulticlusterEnovaServing
 func (d *Detector) DetectOnce() {
-	logger.Infof("DetectOnce start detect once")
+	logger.Debug("DetectOnce start detect once")
 	for taskName, task := range d.TaskMap {
 		if task.TaskSpec.GetScalingStrategy().Strategy == meta.StrategyAuto {
 			if d.IsTaskRunning(taskName, task.TaskSpec) {

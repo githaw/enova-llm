@@ -41,7 +41,7 @@ func NewK8sServingScaler(ch chan meta.TaskSpecInterface) *EnovaServingScaler {
 		Queue: &queue.InnerChanTaskQueue{
 			Ch: ch,
 		},
-		Client: resource.Newk8sResourcClient(),
+		Client: resource.NewK8sResourceClient(),
 	}
 }
 
@@ -82,7 +82,7 @@ func (s *EnovaServingScaler) Run() {
 		if acutalTask.Replica == 0 {
 			s.Client.DeleteTask(*acutalTask)
 		} else {
-			// 执行 LocalDeploy 函数
+			// 执行 localDeploy 函数
 			s.Client.DeployTask(*acutalTask)
 		}
 	}

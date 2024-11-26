@@ -43,6 +43,12 @@ type VllmBackendConfig struct {
 	TrustRemoteCode      bool    `json:"trust_remote_code"`
 }
 
+type SglangBackendConfig struct {
+	TensorParallelSize int     `json:"tensor_parallel_size"`
+	MemFractionStatic  float32 `json:"mem_fraction_static"`
+	TrustRemoteCode    bool    `json:"trust_remote_code"`
+}
+
 func (v *VllmBackendConfig) Update(recommendResult api.ConfigRecommendResult) {
 	if v.MaxNumSeqs <= 0 {
 		v.MaxNumSeqs = recommendResult.MaxNumSeqs
@@ -52,6 +58,15 @@ func (v *VllmBackendConfig) Update(recommendResult api.ConfigRecommendResult) {
 	}
 	if v.GpuMemoryUtilization <= 0 {
 		v.GpuMemoryUtilization = recommendResult.GpuMemoryUtilization
+	}
+}
+
+func (v *SglangBackendConfig) Update(recommendResult api.ConfigRecommendResult) {
+	if v.TensorParallelSize <= 0 {
+		v.TensorParallelSize = recommendResult.TensorParallelSize
+	}
+	if v.MemFractionStatic <= 0 {
+		v.MemFractionStatic = recommendResult.GpuMemoryUtilization
 	}
 }
 
@@ -146,23 +161,26 @@ type KafkaConfig struct {
 }
 
 type CollectorConfig struct {
-	Enable    bool
-	ClusterId string
-	Kafka     KafkaConfig
+	Enable           bool
+	ClusterId        string
+	Kafka            KafkaConfig
+	CustomMetricsAdd map[string]string
 }
 
 type TaskSpec struct {
-	Name                string
-	Model               string
-	Host                string
-	Port                int
-	Image               string
-	Backend             string
-	ExporterEndpoint    string `json:"exporter_endpoint"`
-	ExporterServiceName string `json:"exporter_service_name"`
-	ModelConfig         ModelConfig
-	BackendConfig       BackendConfig
+	Name                string            `json:"name"`
+	Model               string            `json:"model"`
+	Host                string            `json:"host"`
+	Port                int               `json:"port"`
+	Image               string            `json:"image"`
+	Backend             string            `json:"backend"`
+	ExporterEndpoint    string            `json:"exporter_endpoint"`
+	ExporterServiceName string            `json:"exporter_service_name"`
+	ModelConfig         ModelConfig       `json:"model_config"`
+	BackendConfig       BackendConfig     `json:"backend_config"`
 	BackendExtraConfig  map[string]string `json:"backend_extra_config"`
+	Command             []string          `json:"command"`
+	Args                []string          `json:"args"`
 	Replica             int               `json:"replica"`
 	Envs                []Env             `json:"envs"`
 	Gpus                string            `json:"gpus"`
@@ -220,18 +238,20 @@ func (t *TaskSpec) GetPreferGpuNum() int {
 
 func (t *TaskSpec) UnmarshalJSON(data []byte) error {
 	type Alias struct {
-		Name                string
-		Model               string
-		Host                string
-		Port                int
-		Backend             string
-		Image               string
-		ExporterEndpoint    string `json:"exporter_endpoint"`
-		ExporterServiceName string `json:"exporter_service_name"`
-		ModelConfig         ModelConfig
-		Replica             int `json:"replica"`
-		BackendConfig       json.RawMessage
+		Name                string            `json:"name"`
+		Model               string            `json:"model"`
+		Host                string            `json:"host"`
+		Port                int               `json:"port"`
+		Backend             string            `json:"backend"`
+		Image               string            `json:"image"`
+		ExporterEndpoint    string            `json:"exporter_endpoint"`
+		ExporterServiceName string            `json:"exporter_service_name"`
+		ModelConfig         ModelConfig       `json:"model_config"`
+		Replica             int               `json:"replica"`
+		BackendConfig       json.RawMessage   `json:"backend_config"`
 		BackendExtraConfig  map[string]string `json:"backend_extra_config"`
+		Command             []string          `json:"command"`
+		Args                []string          `json:"args"`
 		Envs                []Env             `json:"envs"`
 		Gpus                string            `json:"gpus"`
 		Volumes             []Volume          `json:"volumes"`
@@ -256,6 +276,12 @@ func (t *TaskSpec) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		backendConfig = &vllmConfig
+	case "sglang":
+		var sglangConfig SglangBackendConfig
+		if err := json.Unmarshal(aux.BackendConfig, &sglangConfig); err != nil {
+			return err
+		}
+		backendConfig = &sglangConfig
 	default:
 		return fmt.Errorf("unknown backend type: %s", t.Backend)
 	}
@@ -272,6 +298,8 @@ func (t *TaskSpec) UnmarshalJSON(data []byte) error {
 		Replica:             aux.Replica,
 		BackendConfig:       backendConfig,
 		BackendExtraConfig:  aux.BackendExtraConfig,
+		Command:             aux.Command,
+		Args:                aux.Args,
 		Envs:                aux.Envs,
 		Gpus:                aux.Gpus,
 		Volumes:             aux.Volumes,
