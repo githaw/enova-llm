@@ -265,6 +265,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		Port: intstr.IntOrString{IntVal: int32(w.Spec.Port)}}}, InitialDelaySeconds: 30}
 	switch w.Spec.Backend {
 	case "vllm", "sglang":
+		// TODO: custom health
 		if !w.isCustomized() {
 			livenessProbe = probe
 			livenessProbe.FailureThreshold = 3
@@ -298,8 +299,6 @@ func (w *Workload) buildDeployment() v1.Deployment {
 							Name:            w.Spec.Name,
 							Command:         cmd[:1],
 							Args:            cmd[1:],
-							LivenessProbe:   &livenessProbe,
-							ReadinessProbe:  &readinessProbe,
 							Ports: []corev1.ContainerPort{
 								{
 									ContainerPort: int32(w.Spec.Port),
@@ -330,6 +329,10 @@ func (w *Workload) buildDeployment() v1.Deployment {
 				MountPath: v.MountPath,
 			}
 		}
+	}
+	if !w.isCustomized() {
+		deployment.Spec.Template.Spec.Containers[0].ReadinessProbe = &readinessProbe
+		deployment.Spec.Template.Spec.Containers[0].LivenessProbe = &livenessProbe
 	}
 	// if will add shm by default
 	shmLimitSize := k8sresource.MustParse("1Gi")
