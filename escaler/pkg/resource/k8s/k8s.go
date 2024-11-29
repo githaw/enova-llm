@@ -497,6 +497,18 @@ func (w *Workload) buildCollector() otalv1.OpenTelemetryCollector {
 			"transforms": []interface{}{
 				map[string]interface{}{
 					"action":     "update",
+					"include":    "^sglang:num_queue_reqs$$",
+					"match_type": "regexp",
+					"new_name":   "vllm_num_requests_waiting",
+				},
+				map[string]interface{}{
+					"action":     "update",
+					"include":    "^sglang:num_running_reqs$$",
+					"match_type": "regexp",
+					"new_name":   "vllm_num_requests_running",
+				},
+				map[string]interface{}{
+					"action":     "update",
 					"include":    "^sglang:(.*)$$",
 					"match_type": "regexp",
 					"new_name":   "vllm:$${1}]",
