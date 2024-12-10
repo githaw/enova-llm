@@ -169,6 +169,7 @@ type CollectorConfig struct {
 
 type TaskSpec struct {
 	Name                string            `json:"name"`
+	Annotations         map[string]string `json:"annotations"`
 	Model               string            `json:"model"`
 	Host                string            `json:"host"`
 	Port                int               `json:"port"`
