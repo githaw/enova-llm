@@ -2,7 +2,9 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
 	"log"
 	"net/http"
 
@@ -32,6 +34,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const annotationRestarted = "restartedAt"
+
 var collectorServiceAccount = "otel-collector"
 
 type K8sCli struct {
@@ -46,22 +50,27 @@ type Workload struct {
 }
 
 func (w *Workload) CreateOrUpdate() {
-	podList, err := w.GetPodsList()
+	dp, err := w.GetWorkload()
 	if err != nil {
-		logger.Errorf("K8sResourceClient DeployTask check GetPodsList get error: %v", err)
-		return
-	}
-	if len(podList.Items) == 0 {
-		logger.Debug("workload.GetPodsList get empty podlist")
+		logger.Debug("workload GetWorkload failed")
 		_, err := w.CreateWorkload()
 		if err != nil {
 			return
 		}
 	} else {
-		logger.Debug("workload.GetPodsList get podlist")
-		_, err := w.UpdateWorkload()
-		if err != nil {
-			return
+		// Restarting
+		if w.Spec.Annotations[annotationRestarted] != "" {
+			annotationsJSON, _ := json.Marshal(w.Spec.Annotations)
+			patchData := []byte(`[{"op": "replace", "path": "/spec/template/metadata/annotations", "value": ` + string(annotationsJSON) + ` }]`)
+			_, err := w.UpdateWorkloadWithPatch(patchData)
+			if err != nil {
+				return
+			}
+		} else {
+			_, err := w.UpdateWorkload(dp)
+			if err != nil {
+				return
+			}
 		}
 	}
 
@@ -94,14 +103,15 @@ func (w *Workload) CreateOrUpdate() {
 	}
 
 	if w.Spec.Collector.Enable && !w.isCustomized() {
-		_, err = w.GetCollector()
+		// TODO:resourceVersion not found
+		ot, err := w.GetCollector()
 		if err != nil {
 			_, err = w.CreateCollector()
 			if err != nil {
 				return
 			}
 		} else {
-			_, err = w.UpdateCollector()
+			_, err = w.UpdateCollector(ot)
 			if err != nil {
 				return
 			}
@@ -126,7 +136,11 @@ func (w *Workload) Create() {
 }
 
 func (w *Workload) Update() {
-	_, err := w.UpdateWorkload()
+	dp, err := w.GetWorkload()
+	if err != nil {
+		return
+	}
+	_, err = w.UpdateWorkload(dp)
 	if err != nil {
 		return
 	}
@@ -149,6 +163,8 @@ func (w *Workload) Delete() {
 
 func (w *Workload) CreateWorkload() (*v1.Deployment, error) {
 	deployment := w.buildDeployment()
+	taskSpecJson, err := json.Marshal(deployment)
+	logger.Infof("Create deployment: %s", string(taskSpecJson))
 	opts := metav1.CreateOptions{}
 	ret, err := w.K8sCli.K8sClient.AppsV1().Deployments(w.Spec.Namespace).Create(w.K8sCli.Ctx, &deployment, opts)
 	if err != nil {
@@ -158,10 +174,43 @@ func (w *Workload) CreateWorkload() (*v1.Deployment, error) {
 	return ret, nil
 }
 
-func (w *Workload) UpdateWorkload() (*v1.Deployment, error) {
+func (w *Workload) GetWorkload() (*v1.Deployment, error) {
 	deployment := w.buildDeployment()
+	ret, err := w.K8sCli.K8sClient.AppsV1().Deployments(w.Spec.Namespace).Get(w.K8sCli.Ctx, deployment.Name, metav1.GetOptions{})
+	if err != nil {
+		logger.Errorf("Workload GetWorkload error: %v", err)
+		return ret, err
+	}
+	return ret, nil
+}
+
+func (w *Workload) UpdateWorkload(dp *v1.Deployment) (*v1.Deployment, error) {
+	deployment := w.buildDeployment()
+	taskSpecJson, err := json.Marshal(deployment)
+	logger.Infof("Update deployment: %s", string(taskSpecJson))
 	opts := metav1.UpdateOptions{}
+	deployment.ResourceVersion = dp.ResourceVersion
 	ret, err := w.K8sCli.K8sClient.AppsV1().Deployments(w.Spec.Namespace).Update(w.K8sCli.Ctx, &deployment, opts)
+	if err != nil {
+		logger.Errorf("Workload UpdateWorkload error: %v", err)
+		return ret, err
+	}
+	return ret, nil
+}
+
+func (w *Workload) UpdateWorkloadWithPatch(patchData []byte) (*v1.Deployment, error) {
+	dp, err := w.GetWorkload()
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err := w.K8sCli.K8sClient.AppsV1().Deployments(w.Spec.Namespace).Patch(
+		w.K8sCli.Ctx,
+		dp.Name,
+		types.JSONPatchType,
+		patchData,
+		metav1.PatchOptions{},
+	)
 	if err != nil {
 		logger.Errorf("Workload UpdateWorkload error: %v", err)
 		return ret, err
@@ -312,6 +361,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 			},
 		},
 	}
+	deployment.Spec.Template.Annotations = w.Spec.Annotations
 	volumes := make([]corev1.Volume, len(w.Spec.Volumes))
 	volumeMounts := make([]corev1.VolumeMount, len(w.Spec.Volumes))
 	if len(w.Spec.Volumes) > 0 {
@@ -579,16 +629,16 @@ func (w *Workload) GetIngress() (*networkingv1.Ingress, error) {
 	return ret, nil
 }
 
-func (w *Workload) GetCollector() (otalv1.OpenTelemetryCollector, error) {
+func (w *Workload) GetCollector() (*otalv1.OpenTelemetryCollector, error) {
 	collector := otalv1.OpenTelemetryCollector{}
 	rsc := w.GetOtCollectorResource()
 	ret, err := rsc.Namespace(w.Spec.Namespace).Get(w.K8sCli.Ctx, w.Spec.Name, metav1.GetOptions{})
 	if err != nil {
 		logger.Errorf("GetCollector Get error: %v", err)
-		return collector, err
+		return &collector, err
 	}
 	_ = mapstructure.Decode(ret.Object, &collector)
-	return collector, err
+	return &collector, err
 }
 
 func (w *Workload) CreateCollector() (otalv1.OpenTelemetryCollector, error) {
@@ -614,10 +664,13 @@ func (w *Workload) DeleteCollector() error {
 	return nil
 }
 
-func (w *Workload) UpdateCollector() (otalv1.OpenTelemetryCollector, error) {
+func (w *Workload) UpdateCollector(ot *otalv1.OpenTelemetryCollector) (otalv1.OpenTelemetryCollector, error) {
 	collector := w.buildCollector()
 
 	obj := w.buildCollectorUnstructued(collector)
+	_ = unstructured.SetNestedField(obj.Object, ot.ResourceVersion, "metadata", "resourceVersion")
+
+	logger.Infof("Update Collector: %+v\n", obj.Object)
 
 	rsc := w.GetOtCollectorResource()
 	ret, err := rsc.Namespace(w.Spec.Namespace).Update(w.K8sCli.Ctx, &obj, metav1.UpdateOptions{})
