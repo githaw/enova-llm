@@ -138,7 +138,10 @@ type Service struct {
 }
 
 type Resources struct {
+	CPU     string `json:"cpu"`
 	GPU     string `json:"gpu"`
+	Memory  string `json:"memory"`
+	CPUType string `json:"cpu_type"`
 	GPUType string `json:"gpu_type"`
 }
 
