@@ -202,7 +202,7 @@ type TaskSpec struct {
 	Resources           Resources         `json:"resources"`
 	ScalingStrategy     ScalingStrategy   `json:"scaling_strategy"`
 	Collector           CollectorConfig   `json:"collector"`
-	ConfigMap           ConfigMap         `json:"config_map"`
+	ConfigMaps          []ConfigMap       `json:"config_maps"`
 }
 
 func (t *TaskSpec) GetName() string {
