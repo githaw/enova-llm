@@ -170,6 +170,12 @@ type CollectorConfig struct {
 	CustomMetricsAdd map[string]string
 }
 
+type ConfigMap struct {
+	Name string `json:"name"` // ConfigMap name
+	Path string `json:"path"` // ConfigMap path
+	Type string `json:"type"` // reserve
+}
+
 type TaskSpec struct {
 	Name                string            `json:"name"`
 	Annotations         map[string]string `json:"annotations"`
@@ -196,6 +202,7 @@ type TaskSpec struct {
 	Resources           Resources         `json:"resources"`
 	ScalingStrategy     ScalingStrategy   `json:"scaling_strategy"`
 	Collector           CollectorConfig   `json:"collector"`
+	ConfigMap           ConfigMap         `json:"config_map"`
 }
 
 func (t *TaskSpec) GetName() string {

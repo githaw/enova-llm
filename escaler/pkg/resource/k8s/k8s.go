@@ -153,10 +153,10 @@ func (w *Workload) Update() {
 }
 
 func (w *Workload) Delete() {
-	w.DeleteWorkload()
-	w.DeleteService()
-	w.DeleteIngress()
-	w.DeleteCollector()
+	_ = w.DeleteWorkload()
+	_ = w.DeleteService()
+	_ = w.DeleteIngress()
+	_ = w.DeleteCollector()
 }
 
 func (w *Workload) CreateWorkload() (*v1.Deployment, error) {
@@ -284,6 +284,18 @@ func (w *Workload) DeleteService() error {
 	return nil
 }
 
+func (w *Workload) GetConfigMap() (*corev1.ConfigMap, error) {
+	if w.Spec.ConfigMap.Name != "" {
+		ret, err := w.K8sCli.K8sClient.CoreV1().ConfigMaps(w.Spec.Namespace).Get(w.K8sCli.Ctx, w.Spec.ConfigMap.Name, metav1.GetOptions{})
+		if err != nil {
+			logger.Errorf("Workload GetConfigMap error: %v", err)
+			return ret, err
+		}
+		return ret, nil
+	}
+	return &corev1.ConfigMap{}, fmt.Errorf(string(metav1.StatusReasonNotFound))
+}
+
 func (w *Workload) buildDeployment() v1.Deployment {
 	replicas := int32(w.Spec.Replica)
 	matchLabels := make(map[string]string)
@@ -378,6 +390,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 			}
 		}
 	}
+
 	if !w.isCustomized() {
 		deployment.Spec.Template.Spec.Containers[0].ReadinessProbe = &readinessProbe
 		deployment.Spec.Template.Spec.Containers[0].LivenessProbe = &livenessProbe
@@ -397,6 +410,23 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		Name:      "shm",
 		MountPath: "/dev/shm",
 	})
+
+	// ConfigMap
+	if configMap, err := w.GetConfigMap(); err == nil {
+		volumes = append(volumes, corev1.Volume{
+			Name: configMap.Name,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: configMap.Name},
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      configMap.Name,
+			MountPath: w.Spec.ConfigMap.Path,
+		})
+	}
+
 	maxUnavailable := intstr.FromString("25%")
 	maxSurge := intstr.FromString("0%")
 	deployment.Spec.Strategy = v1.DeploymentStrategy{
