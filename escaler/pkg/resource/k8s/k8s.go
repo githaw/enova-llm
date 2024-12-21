@@ -284,16 +284,13 @@ func (w *Workload) DeleteService() error {
 	return nil
 }
 
-func (w *Workload) GetConfigMap() (*corev1.ConfigMap, error) {
-	if w.Spec.ConfigMap.Name != "" {
-		ret, err := w.K8sCli.K8sClient.CoreV1().ConfigMaps(w.Spec.Namespace).Get(w.K8sCli.Ctx, w.Spec.ConfigMap.Name, metav1.GetOptions{})
-		if err != nil {
-			logger.Errorf("Workload GetConfigMap error: %v", err)
-			return ret, err
-		}
-		return ret, nil
+func (w *Workload) GetConfigMap(name string) (*corev1.ConfigMap, error) {
+	ret, err := w.K8sCli.K8sClient.CoreV1().ConfigMaps(w.Spec.Namespace).Get(w.K8sCli.Ctx, name, metav1.GetOptions{})
+	if err != nil {
+		logger.Errorf("Workload GetConfigMap error: %v", err)
+		return ret, err
 	}
-	return &corev1.ConfigMap{}, fmt.Errorf(string(metav1.StatusReasonNotFound))
+	return ret, nil
 }
 
 func (w *Workload) buildDeployment() v1.Deployment {
@@ -411,20 +408,22 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		MountPath: "/dev/shm",
 	})
 
-	// ConfigMap
-	if configMap, err := w.GetConfigMap(); err == nil {
-		volumes = append(volumes, corev1.Volume{
-			Name: configMap.Name,
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: configMap.Name},
+	// ConfigMaps
+	for _, v := range w.Spec.ConfigMaps {
+		if configMap, err := w.GetConfigMap(v.Name); err == nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: configMap.Name,
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: configMap.Name},
+					},
 				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      configMap.Name,
-			MountPath: w.Spec.ConfigMap.Path,
-		})
+			})
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      configMap.Name,
+				MountPath: v.Path,
+			})
+		}
 	}
 
 	maxUnavailable := intstr.FromString("25%")
