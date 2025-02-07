@@ -155,7 +155,6 @@ func (r DeployResource) Post(c *gin.Context) {
 		Volumes:             deployRequest.Volumes,
 		Namespace:           deployRequest.Namespace,
 		NodeSelector:        deployRequest.NodeSelector,
-		Ingress:             deployRequest.Ingress,
 		Service:             deployRequest.Service,
 		Resources:           deployRequest.Resources,
 		ScalingStrategy:     deployRequest.ScalingStrategy,
