@@ -22,7 +22,6 @@ import (
 
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -86,20 +85,6 @@ func (w *Workload) CreateOrUpdate() {
 		}
 	}
 
-	_, err = w.GetIngress()
-	if err != nil {
-		logger.Debugf("K8sResourceClient DeployTask check ingress get error: %v", err)
-		_, err = w.CreateIngress()
-		if err != nil {
-			return
-		}
-	} else {
-		_, err = w.UpdateIngress()
-		if err != nil {
-			return
-		}
-	}
-
 	if w.Spec.Collector.Enable && !w.isCustomized() {
 		// TODO:resourceVersion not found
 		ot, err := w.GetCollector()
@@ -117,17 +102,13 @@ func (w *Workload) CreateOrUpdate() {
 	}
 }
 
-// Create 1. create workload, 2. create ingress 3. create service
+// Create 1. create workload, 2. create service
 func (w *Workload) Create() {
 	_, err := w.CreateWorkload()
 	if err != nil {
 		return
 	}
 	_, err = w.CreateService()
-	if err != nil {
-		return
-	}
-	_, err = w.CreateIngress()
 	if err != nil {
 		return
 	}
@@ -146,16 +127,11 @@ func (w *Workload) Update() {
 	if err != nil {
 		return
 	}
-	_, err = w.UpdateIngress()
-	if err != nil {
-		return
-	}
 }
 
 func (w *Workload) Delete() {
 	_ = w.DeleteWorkload()
 	_ = w.DeleteService()
-	_ = w.DeleteIngress()
 	_ = w.DeleteCollector()
 }
 
@@ -224,34 +200,12 @@ func (w *Workload) DeleteWorkload() error {
 	return nil
 }
 
-func (w *Workload) CreateIngress() (*networkingv1.Ingress, error) {
-	opts := metav1.CreateOptions{}
-	ingress := w.buildIngress()
-	ret, err := w.K8sCli.K8sClient.NetworkingV1().Ingresses(w.Spec.Namespace).Create(w.K8sCli.Ctx, &ingress, opts)
-	if err != nil {
-		logger.Errorf("Workload CreateIngress error: %v", err)
-		return ret, err
-	}
-	return ret, nil
-}
-
 func (w *Workload) CreateService() (*corev1.Service, error) {
 	opts := metav1.CreateOptions{}
 	service := w.buildService()
 	ret, err := w.K8sCli.K8sClient.CoreV1().Services(w.Spec.Namespace).Create(w.K8sCli.Ctx, &service, opts)
 	if err != nil {
 		logger.Errorf("Workload CreateService error: %v", err)
-		return ret, err
-	}
-	return ret, nil
-}
-
-func (w *Workload) UpdateIngress() (*networkingv1.Ingress, error) {
-	opts := metav1.UpdateOptions{}
-	ingress := w.buildIngress()
-	ret, err := w.K8sCli.K8sClient.NetworkingV1().Ingresses(w.Spec.Namespace).Update(w.K8sCli.Ctx, &ingress, opts)
-	if err != nil {
-		logger.Errorf("Workload UpdateIngress error: %v", err)
 		return ret, err
 	}
 	return ret, nil
@@ -266,14 +220,6 @@ func (w *Workload) UpdateService() (*corev1.Service, error) {
 		return ret, err
 	}
 	return ret, nil
-}
-
-func (w *Workload) DeleteIngress() error {
-	if err := w.K8sCli.K8sClient.NetworkingV1().Ingresses(w.Spec.Namespace).Delete(w.K8sCli.Ctx, w.buildIngress().Name, metav1.DeleteOptions{}); client.IgnoreNotFound(err) != nil {
-		logger.Errorf("Workload DeleteIngress error: %v", err)
-		return err
-	}
-	return nil
 }
 
 func (w *Workload) DeleteService() error {
@@ -476,45 +422,6 @@ func (w *Workload) buildService() corev1.Service {
 	return service
 }
 
-func (w *Workload) buildIngress() networkingv1.Ingress {
-	ingressClsName := "nginx"
-	acutalPaths := make([]networkingv1.HTTPIngressPath, len(w.Spec.Ingress.Paths))
-	rules := make([]networkingv1.IngressRule, 1)
-
-	for i, p := range w.Spec.Ingress.Paths {
-		pathType := networkingv1.PathTypePrefix
-
-		acutalPaths[i] = networkingv1.HTTPIngressPath{
-			Path:     p.Path,
-			PathType: &pathType,
-			Backend: networkingv1.IngressBackend{
-				Service: &networkingv1.IngressServiceBackend{
-					Name: fmt.Sprintf("%s-svc", w.Spec.Name),
-					Port: networkingv1.ServiceBackendPort{
-						Number: p.Backend.Service.Port.Number,
-					},
-				},
-			},
-		}
-	}
-	rules[0] = networkingv1.IngressRule{
-		IngressRuleValue: networkingv1.IngressRuleValue{
-			HTTP: &networkingv1.HTTPIngressRuleValue{
-				Paths: acutalPaths,
-			},
-		},
-	}
-	ingress := networkingv1.Ingress{
-		Spec: networkingv1.IngressSpec{
-			IngressClassName: &ingressClsName,
-			Rules:            rules,
-		},
-	}
-	ingress.Name = fmt.Sprintf("%s-ingress", w.Spec.Name)
-	ingress.Annotations = w.Spec.Ingress.Annotations
-	return ingress
-}
-
 func formatBrokers(brokers []string) string {
 	if len(brokers) == 0 {
 		return "[]"
@@ -640,17 +547,6 @@ func (w *Workload) GetService() (*corev1.Service, error) {
 	ret, err := w.K8sCli.K8sClient.CoreV1().Services(w.Spec.Namespace).Get(w.K8sCli.Ctx, service.Name, opts)
 	if err != nil {
 		logger.Errorf("Workload GetService error: %v", err)
-		return ret, err
-	}
-	return ret, nil
-}
-
-func (w *Workload) GetIngress() (*networkingv1.Ingress, error) {
-	opts := metav1.GetOptions{}
-	ingress := w.buildIngress()
-	ret, err := w.K8sCli.K8sClient.NetworkingV1().Ingresses(w.Spec.Namespace).Get(w.K8sCli.Ctx, ingress.Name, opts)
-	if err != nil {
-		logger.Errorf("Workload GetIngress error: %v", err)
 		return ret, err
 	}
 	return ret, nil

@@ -87,7 +87,6 @@ type DeployRequest struct {
 	Volumes             []Volume          `json:"volumes"`
 	Namespace           string            `json:"namespace"`
 	NodeSelector        map[string]string `json:"node_selector"`
-	Ingress             Ingress           `json:"ingress"`
 	Service             Service           `json:"service"`
 	Resources           Resources         `json:"resources"`
 	ScalingStrategy     ScalingStrategy   `json:"scaling_strategy"`
@@ -105,13 +104,6 @@ type Volume struct {
 }
 
 type Raw struct{}
-
-type Ingress struct {
-	Name        string            `json:"name"`
-	Paths       []Path            `json:"paths"`
-	Raw         Raw               `json:"raw"`
-	Annotations map[string]string `json:"annotations"`
-}
 
 type Path struct {
 	Path    string  `json:"path"`
@@ -197,7 +189,6 @@ type TaskSpec struct {
 	Volumes             []Volume          `json:"volumes"`
 	Namespace           string            `json:"namespace"`
 	NodeSelector        map[string]string `json:"node_selector"`
-	Ingress             Ingress           `json:"ingress"`
 	Service             Service           `json:"service"`
 	Resources           Resources         `json:"resources"`
 	ScalingStrategy     ScalingStrategy   `json:"scaling_strategy"`
@@ -268,7 +259,6 @@ func (t *TaskSpec) UnmarshalJSON(data []byte) error {
 		Volumes             []Volume          `json:"volumes"`
 		Namespace           string            `json:"namespace"`
 		NodeSelector        map[string]string `json:"node_selector"`
-		Ingress             Ingress           `json:"ingress"`
 		Service             Service           `json:"service"`
 		Resources           Resources         `json:"resources"`
 		ScalingStrategy     ScalingStrategy   `json:"scaling_strategy"`
@@ -316,7 +306,6 @@ func (t *TaskSpec) UnmarshalJSON(data []byte) error {
 		Volumes:             aux.Volumes,
 		Namespace:           aux.Namespace,
 		NodeSelector:        aux.NodeSelector,
-		Ingress:             aux.Ingress,
 		Service:             aux.Service,
 		Resources:           aux.Resources,
 		ScalingStrategy:     aux.ScalingStrategy,

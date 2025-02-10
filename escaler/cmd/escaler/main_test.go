@@ -103,22 +103,6 @@ func TestK8sEnovaServing(t *testing.T) {
 		Volumes:            volumnes,
 		BackendExtraConfig: extraConfig,
 		Namespace:          "emergingai",
-		Ingress: meta.Ingress{
-			Name: fmt.Sprintf("%s-ingress", taskName),
-			Paths: []meta.Path{
-				{
-					Path: "/test/openai/v1/completions",
-					Backend: meta.Backend{
-						Service: meta.ServiceDetail{
-							Name: fmt.Sprintf("%s-svc", taskName),
-							Port: meta.Port{
-								Number: 9199,
-							},
-						},
-					},
-				},
-			},
-		},
 		Service: meta.Service{
 			Name: fmt.Sprintf("%s-svc", taskName),
 			Ports: []meta.Port{
