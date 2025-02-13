@@ -315,23 +315,32 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		},
 	}
 	deployment.Spec.Template.Annotations = w.Spec.Annotations
-	volumes := make([]corev1.Volume, len(w.Spec.Volumes))
-	volumeMounts := make([]corev1.VolumeMount, len(w.Spec.Volumes))
-	if len(w.Spec.Volumes) > 0 {
-		for i, v := range w.Spec.Volumes {
-			volumes[i] = corev1.Volume{
-				VolumeSource: corev1.VolumeSource{
-					HostPath: &corev1.HostPathVolumeSource{
-						Path: v.HostPath,
-					},
-				},
-				Name: fmt.Sprintf("hostpath%d", i),
-			}
-			volumeMounts[i] = corev1.VolumeMount{
-				Name:      fmt.Sprintf("hostpath%d", i),
-				MountPath: v.MountPath,
-			}
+	volumes := make([]corev1.Volume, 0)
+	volumeMounts := make([]corev1.VolumeMount, 0)
+
+	for _, v := range w.Spec.Volumes {
+		volumeSource := corev1.VolumeSource{}
+		switch v.Type {
+		case "emptyDir":
+			volumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
+			break
+		case "hostPath":
+			volumeSource.HostPath = &corev1.HostPathVolumeSource{Path: v.Path}
+			break
+		case "NFS":
+			volumeSource.NFS = &corev1.NFSVolumeSource{Server: v.Value, Path: v.Path}
+			break
+		default:
+			continue
 		}
+		volumes = append(volumes, corev1.Volume{Name: v.Name, VolumeSource: volumeSource})
+	}
+
+	for _, v := range w.Spec.VolumeMounts {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      v.Name,
+			MountPath: v.Path,
+		})
 	}
 
 	if !w.isCustomized() {
