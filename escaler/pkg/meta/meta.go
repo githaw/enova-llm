@@ -99,8 +99,15 @@ type Env struct {
 }
 
 type Volume struct {
-	MountPath string `json:"mountPath"`
-	HostPath  string `json:"hostPath"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
+	Path  string `json:"path"`
+	Type  string `json:"type"`
+}
+
+type VolumeMount struct {
+	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
+	Path string `json:"path" protobuf:"bytes,2,opt,name=path"`
 }
 
 type Raw struct{}
@@ -187,6 +194,7 @@ type TaskSpec struct {
 	Envs                []Env             `json:"envs"`
 	Gpus                string            `json:"gpus"`
 	Volumes             []Volume          `json:"volumes"`
+	VolumeMounts        []VolumeMount     `json:"volume_mounts"`
 	Namespace           string            `json:"namespace"`
 	NodeSelector        map[string]string `json:"node_selector"`
 	Service             Service           `json:"service"`
