@@ -347,7 +347,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		deployment.Spec.Template.Spec.Containers[0].ReadinessProbe = &readinessProbe
 		deployment.Spec.Template.Spec.Containers[0].LivenessProbe = &livenessProbe
 	}
-	// if will add shm by default
+	// it will add shm by default
 	shmLimitSize := k8sresource.MustParse("1Gi")
 	volumes = append(volumes, corev1.Volume{
 		VolumeSource: corev1.VolumeSource{
