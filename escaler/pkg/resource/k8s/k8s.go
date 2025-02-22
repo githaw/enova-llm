@@ -261,6 +261,12 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		}
 	}
 
+	// imagePullSecrets
+	imagesPullSecrets := make([]corev1.LocalObjectReference, len(w.Spec.ImagePullSecrets))
+	for _, s := range w.Spec.ImagePullSecrets {
+		imagesPullSecrets = append(imagesPullSecrets, corev1.LocalObjectReference{Name: s})
+	}
+
 	livenessProbe := corev1.Probe{}
 	readinessProbe := corev1.Probe{}
 	probe := corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/health",
@@ -310,6 +316,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 							Env: env,
 						},
 					},
+					ImagePullSecrets: imagesPullSecrets,
 				},
 			},
 		},
