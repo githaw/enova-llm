@@ -182,6 +182,7 @@ type TaskSpec struct {
 	Host                string            `json:"host"`
 	Port                int               `json:"port"`
 	Image               string            `json:"image"`
+	ImagePullSecrets    []string          `json:"image_pull_secrets"`
 	Backend             string            `json:"backend"`
 	ExporterEndpoint    string            `json:"exporter_endpoint"`
 	ExporterServiceName string            `json:"exporter_service_name"`
