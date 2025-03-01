@@ -106,8 +106,9 @@ type Volume struct {
 }
 
 type VolumeMount struct {
-	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
-	Path string `json:"path" protobuf:"bytes,2,opt,name=path"`
+	Name     string `json:"name" protobuf:"bytes,1,opt,name=name"`
+	Path     string `json:"path" protobuf:"bytes,2,opt,name=path"`
+	ReadOnly bool   `json:"readOnly" protobuf:"varint,3,opt,name=readOnly"`
 }
 
 type Raw struct{}

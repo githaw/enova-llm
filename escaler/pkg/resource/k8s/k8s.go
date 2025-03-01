@@ -347,6 +347,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      v.Name,
 			MountPath: v.Path,
+			ReadOnly:  v.ReadOnly,
 		})
 	}
 
