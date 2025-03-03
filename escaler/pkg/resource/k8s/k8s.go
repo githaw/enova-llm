@@ -693,7 +693,7 @@ func (w *Workload) GetOtCollectorResource() dynamic.NamespaceableResourceInterfa
 }
 
 func (w *Workload) isCustomized() bool {
-	return len(w.Spec.Command) > 0 && strings.HasSuffix(strings.Split(w.Spec.Image, ":")[0], "/enova")
+	return !strings.HasSuffix(strings.Split(w.Spec.Image, ":")[0], "/enova")
 }
 
 func (w *Workload) InPlaceRestart(pod string, container string) error {
