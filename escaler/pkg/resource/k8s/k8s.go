@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
 	"k8s.io/apimachinery/pkg/types"
 	"log"
 	"net/http"
@@ -14,7 +15,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 
-	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/logger"
@@ -246,13 +246,6 @@ func (w *Workload) buildDeployment() v1.Deployment {
 	matchLabels["enovaserving-name"] = w.Spec.Name
 	matchLabels["app"] = w.Spec.Name
 	matchLabels["version"] = "v1.0.0"
-	cmd := make([]string, 0)
-	if len(w.Spec.Command) > 0 {
-		cmd = append(cmd, w.Spec.Command...)
-		cmd = append(cmd, w.Spec.Args...)
-	} else {
-		cmd = rscutils.BuildCmdFromTaskSpec(*w.Spec)
-	}
 
 	env := make([]corev1.EnvVar, len(w.Spec.Envs))
 	for i, e := range w.Spec.Envs {
@@ -306,8 +299,6 @@ func (w *Workload) buildDeployment() v1.Deployment {
 							Image:           w.Spec.Image,
 							ImagePullPolicy: corev1.PullAlways,
 							Name:            w.Spec.Name,
-							Command:         cmd[:1],
-							Args:            cmd[1:],
 							Ports: []corev1.ContainerPort{
 								{
 									ContainerPort: int32(w.Spec.Port),
@@ -322,6 +313,18 @@ func (w *Workload) buildDeployment() v1.Deployment {
 			},
 		},
 	}
+
+	if w.isCustomized() {
+		if len(w.Spec.Command) > 0 {
+			deployment.Spec.Template.Spec.Containers[0].Command = w.Spec.Command
+			deployment.Spec.Template.Spec.Containers[0].Args = w.Spec.Args
+		}
+	} else {
+		cmd := rscutils.BuildCmdFromTaskSpec(*w.Spec)
+		deployment.Spec.Template.Spec.Containers[0].Command = cmd[:1]
+		deployment.Spec.Template.Spec.Containers[0].Args = cmd[1:]
+	}
+
 	deployment.Spec.Template.Annotations = w.Spec.Annotations
 	volumes := make([]corev1.Volume, 0)
 	volumeMounts := make([]corev1.VolumeMount, 0)
