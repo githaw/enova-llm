@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
 	"k8s.io/client-go/rest"
@@ -692,7 +693,7 @@ func (w *Workload) GetOtCollectorResource() dynamic.NamespaceableResourceInterfa
 }
 
 func (w *Workload) isCustomized() bool {
-	return len(w.Spec.Command) > 0
+	return len(w.Spec.Command) > 0 && strings.HasSuffix(strings.Split(w.Spec.Image, ":")[0], "/enova")
 }
 
 func (w *Workload) InPlaceRestart(pod string, container string) error {
