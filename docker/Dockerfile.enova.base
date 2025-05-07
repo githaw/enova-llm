@@ -14,9 +14,16 @@ RUN mkdir -p /etc/OpenCL/vendors && \
 COPY ./requirements-docker.txt /opt/enova/requirements.txt
 COPY ./requirements-docker-no-deps.txt /opt/enova/requirements-docker-no-deps.txt
 
-# RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple && \
+RUN export https_proxy=http://192.168.3.2:7892 && export http_proxy=http://192.168.3.2:7892 && \
+    pip install flashinfer-python -i https://flashinfer.ai/whl/cu124/torch2.6 --no-deps --no-cache-dir
 RUN pip install build --no-cache-dir && \
     pip install pip setuptools setuptools_scm[toml]==7.1.0 toml poetry && \
     pip install -r /opt/enova/requirements.txt --no-cache-dir && \
-    pip install flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4 --no-deps --no-cache-dir && \
     pip install -r /opt/enova/requirements-docker-no-deps.txt --no-deps --no-cache-dir
+
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple && \
+    pip install build --no-cache-dir && \
+    pip install pip setuptools setuptools_scm[toml]==7.1.0 toml poetry --index-url https://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com && \
+    pip install -r /opt/enova/requirements.txt --no-cache-dir --index-url https://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com && \
+    pip install -r /opt/enova/requirements-docker-no-deps.txt --no-deps --no-cache-dir --index-url https://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com 
+    

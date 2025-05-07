@@ -4,7 +4,14 @@ from enova.common.logger import LOGGER
 from enova.common.config import CONFIG
 from enova.common.constant import VllmMode
 from enova.serving.backend.base import BaseBackend
-from enova.serving.middlewares.cors import WSCORSMiddleware
+
+
+class CustomDict(dict):
+
+    def __getattribute__(self, name: str):
+        if name in self:
+            return self[name]
+        return None
 
 
 @dataclasses.dataclass
@@ -40,41 +47,27 @@ class VllmBackend(BaseBackend):
             )
         elif vllm_mode == VllmMode.OPENAI.value:
             from vllm.entrypoints.openai import api_server
-            from addict import Dict as AddDict
 
-            engine_args = AsyncEngineArgs(model=self.model, **CONFIG.vllm)
+            class CustomArgParser(api_server.FlexibleArgumentParser):
+
+                def parse_args(self, args=None, namespace=None):
+                    args, _ = self.parse_known_args(args, namespace)
+                    return args
+
+            parser = CustomArgParser(description="vLLM OpenAI-Compatible RESTful API server.")
+            parser = api_server.make_arg_parser(parser)
+            args = parser.parse_args()
+
+            current_engine_args = {k: v for k, v in CONFIG.vllm.items() if k in AsyncEngineArgs.__dataclass_fields__}
+            engine_args = AsyncEngineArgs(model=self.model, **current_engine_args)
             engine = AsyncLLMEngine.from_engine_args(engine_args, usage_context=api_server.UsageContext.OPENAI_API_SERVER)
-
-            request_logger = api_server.RequestLogger(max_log_len=CONFIG.vllm.get("max_log_len"))
-            engine_model_config = asyncio.run(engine.get_model_config())
-
-            served_model_names = [self.model]
-            openai_serving_chat = api_server.OpenAIServingChat(
-                engine,
-                model_config=engine_model_config,
-                served_model_names=served_model_names,
-                response_role=CONFIG.vllm.get("response_role") or "assistant",
-                lora_modules=CONFIG.vllm.get("lora_modules"),
-                prompt_adapters=CONFIG.vllm.get("prompt_adapters"),
-                request_logger=request_logger,
-                chat_template=CONFIG.vllm.get("chat_template"),
-            )
-            openai_serving_completion = api_server.OpenAIServingCompletion(
-                engine,
-                model_config=engine_model_config,
-                served_model_names=served_model_names,
-                lora_modules=CONFIG.vllm.get("lora_modules"),
-                prompt_adapters=CONFIG.vllm.get("prompt_adapters"),
-                request_logger=request_logger,
-                return_tokens_as_token_ids=CONFIG.vllm.get("return_tokens_as_token_ids") or False,
-            )
+            engine_model_config = asyncio.run(engine.get_vllm_config())
             api_server.engine = engine
             api_server.async_engine_client = engine
             api_server.engine_args = engine_args
-            api_server.openai_serving_chat = openai_serving_chat
-            api_server.openai_serving_completion = openai_serving_completion
-            args = AddDict(CONFIG.vllm)
             api_server.app = api_server.build_app(args)
+            asyncio.run(api_server.init_app_state(api_server.async_engine_client, engine_model_config, api_server.app.state, args))
+
         else:
             raise ValueError(f"vllm_mode: {vllm_mode} is not support")
         LOGGER.info(f"CONFIG.vllm: {CONFIG.vllm}")
