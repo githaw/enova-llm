@@ -4,22 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
-	"k8s.io/apimachinery/pkg/types"
 	"log"
 	"net/http"
 	"strings"
 
-	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
+	"k8s.io/apimachinery/pkg/types"
+
+	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
+
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 
+	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/logger"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/meta"
-	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -280,6 +284,27 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		}
 	}
 
+	// cpu,memory request & limit
+	resources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{},
+		Limits:   corev1.ResourceList{},
+	}
+
+	// cpu,memory request & limit
+	if w.Spec.Resources.CPU != "" {
+		q := k8sresource.MustParse(w.Spec.Resources.CPU)
+		resources.Requests[corev1.ResourceCPU] = q
+		resources.Limits[corev1.ResourceCPU] = q
+	}
+
+	if w.Spec.Resources.Memory != "" {
+		q := k8sresource.MustParse(w.Spec.Resources.Memory)
+		resources.Requests[corev1.ResourceMemory] = q
+		resources.Limits[corev1.ResourceMemory] = q
+	}
+
+	resources.Requests[corev1.ResourceName("nvidia.com/gpu")] = k8sresource.MustParse(w.Spec.Resources.GPU)
+
 	// default mount ~/.cache to host data disk
 	deployment := v1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -305,7 +330,8 @@ func (w *Workload) buildDeployment() v1.Deployment {
 									Protocol:      corev1.ProtocolTCP,
 								},
 							},
-							Env: env,
+							Env:       env,
+							Resources: resources,
 						},
 					},
 					ImagePullSecrets: imagesPullSecrets,
@@ -405,13 +431,6 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		deployment.Spec.Template.Spec.NodeSelector = w.Spec.NodeSelector
 	}
 
-	request := corev1.ResourceList{
-		corev1.ResourceName("nvidia.com/gpu"): k8sresource.MustParse(w.Spec.Resources.GPU),
-	}
-	deployment.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{
-		Limits:   request,
-		Requests: request,
-	}
 	deployment.Spec.Template.Labels = matchLabels
 	deployment.Labels = matchLabels
 	return deployment
