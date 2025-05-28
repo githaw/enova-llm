@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
@@ -56,23 +57,19 @@ type Workload struct {
 func (w *Workload) CreateOrUpdate() {
 	dp, err := w.GetWorkload()
 	if err != nil {
-		logger.Debug("workload GetWorkload failed")
-		_, err := w.CreateWorkload()
-		if err != nil {
-			return
-		}
-	} else {
-		// Restarting
-		if w.Spec.Annotations[annotationRestarted] != "" {
-			annotationsJSON, _ := json.Marshal(w.Spec.Annotations)
-			patchData := []byte(`[{"op": "replace", "path": "/spec/template/metadata/annotations", "value": ` + string(annotationsJSON) + ` }]`)
-			_, _ = w.UpdateWorkloadWithPatch(patchData)
-			return
-		} else {
-			_, err := w.UpdateWorkload(dp)
+		if apierrors.IsNotFound(err) {
+			_, err := w.CreateWorkload()
 			if err != nil {
+				logger.Error(err, "Failed to create workload")
 				return
 			}
+		}
+		logger.Error(err, "workload GetWorkload failed")
+	} else {
+		_, err := w.UpdateWorkload(dp)
+		if err != nil {
+			logger.Error(err, "Failed to update workload")
+			return
 		}
 	}
 
@@ -308,9 +305,10 @@ func (w *Workload) buildDeployment() v1.Deployment {
 	// default mount ~/.cache to host data disk
 	deployment := v1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      w.Spec.Name,
-			Namespace: w.Spec.Namespace,
-			Labels:    matchLabels,
+			Name:        w.Spec.Name,
+			Namespace:   w.Spec.Namespace,
+			Labels:      matchLabels,
+			Annotations: w.Spec.Annotations,
 		},
 		Spec: v1.DeploymentSpec{
 			Replicas: &replicas,
