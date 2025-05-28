@@ -249,9 +249,11 @@ func (w *Workload) buildDeployment() v1.Deployment {
 	}
 
 	// imagePullSecrets
-	imagesPullSecrets := make([]corev1.LocalObjectReference, len(w.Spec.ImagePullSecrets))
+	var imagePullSecrets []corev1.LocalObjectReference
 	for _, s := range w.Spec.ImagePullSecrets {
-		imagesPullSecrets = append(imagesPullSecrets, corev1.LocalObjectReference{Name: s})
+		if s != "" {
+			imagePullSecrets = append(imagePullSecrets, corev1.LocalObjectReference{Name: s})
+		}
 	}
 
 	livenessProbe := corev1.Probe{}
@@ -293,6 +295,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 	}
 
 	resources.Requests[corev1.ResourceName("nvidia.com/gpu")] = k8sresource.MustParse(w.Spec.Resources.GPU)
+	resources.Limits[corev1.ResourceName("nvidia.com/gpu")] = k8sresource.MustParse(w.Spec.Resources.GPU)
 
 	// default mount ~/.cache to host data disk
 	deployment := v1.Deployment{
@@ -324,7 +327,7 @@ func (w *Workload) buildDeployment() v1.Deployment {
 							Resources: resources,
 						},
 					},
-					ImagePullSecrets: imagesPullSecrets,
+					ImagePullSecrets: imagePullSecrets,
 				},
 			},
 		},
