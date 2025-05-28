@@ -8,5 +8,4 @@ type ClientInterface interface {
 	IsTaskExist(spec meta.TaskSpec) bool
 	IsTaskRunning(spec meta.TaskSpec) bool
 	GetRuntimeInfos(spec meta.TaskSpec) *meta.RuntimeInfo
-	InPlaceRestart(spec meta.TaskSpec) bool
 }

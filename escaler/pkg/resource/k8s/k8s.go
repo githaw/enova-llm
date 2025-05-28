@@ -4,20 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
-
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/remotecommand"
-
-	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -714,48 +706,4 @@ func (w *Workload) GetOtCollectorResource() dynamic.NamespaceableResourceInterfa
 
 func (w *Workload) isCustomized() bool {
 	return !strings.HasSuffix(strings.Split(w.Spec.Image, ":")[0], "/enova")
-}
-
-func (w *Workload) InPlaceRestart(pod string, container string) error {
-
-	req := w.K8sCli.K8sClient.CoreV1().RESTClient().
-		Post().
-		Resource("pods").
-		Name(pod).
-		Namespace(w.Spec.Namespace).
-		SubResource("exec").
-		Param("container", container).
-		Param("command", "sh").
-		Param("command", "-c").
-		Param("command", "kill 1").
-		Param("stdin", "false").
-		Param("stdout", "true").
-		Param("stderr", "true").
-		Param("tty", "false")
-
-	// build SPDY connect
-	var conf *rest.Config
-	if config.GetEConfig().K8s.InCluster {
-		conf, _ = rest.InClusterConfig()
-	}
-	conf, _ = clientcmd.BuildConfigFromFlags("", config.GetEConfig().K8s.KubeConfigPath)
-
-	exec, err := remotecommand.NewSPDYExecutor(conf, http.MethodPost, req.URL())
-	if err != nil {
-		log.Fatalf("Failed to create SPDY executor: %v", err)
-		return err
-	}
-
-	// execute the command
-	err = exec.Stream(remotecommand.StreamOptions{
-		Stdout: log.Writer(),
-		Stderr: log.Writer(),
-	})
-	if err != nil {
-		log.Fatalf("Failed to execute command: %v", err)
-		return err
-	}
-
-	log.Println("Container restart triggered successfully!")
-	return nil
 }

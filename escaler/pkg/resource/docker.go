@@ -3,14 +3,14 @@ package resource
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 
-	"fmt"
-	"strconv"
+	"github.com/docker/docker/client"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/meta"
-	"github.com/docker/docker/client"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/logger"
@@ -227,10 +227,6 @@ func (d *DockerResourceClient) createSingleServing(spec meta.TaskSpec, container
 		Volumes:       buildDockerVolumes(spec.Volumes),
 	}
 	return d.DockerClient.CreateContainer(params)
-}
-
-func (d *DockerResourceClient) InPlaceRestart(spec meta.TaskSpec) bool {
-	return true
 }
 
 func buildDockerEnvs(envs []meta.Env) []string {
