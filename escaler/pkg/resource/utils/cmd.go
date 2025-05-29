@@ -3,9 +3,10 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
 	"reflect"
 	"strconv"
+
+	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/meta"
 )
