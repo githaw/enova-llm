@@ -67,11 +67,6 @@ type Detector struct {
 }
 
 func NewDetector(ch chan meta.TaskSpecInterface) *Detector {
-	// pub := zmq.ZmqPublisher{
-	// 	Host: config.GetEConfig().Zmq.Host,
-	// 	Port: config.GetEConfig().Zmq.Port,
-	// }
-	// pub.Init()
 	return &Detector{
 		Queue: &queue.InnerChanTaskQueue{
 			Ch: ch,
@@ -89,11 +84,6 @@ func NewDetector(ch chan meta.TaskSpecInterface) *Detector {
 }
 
 func NewK8sDetector(ch chan meta.TaskSpecInterface, multiclusterScaler MulticlusterScaler) *Detector {
-	// pub := zmq.ZmqPublisher{
-	// 	Host: config.GetEConfig().Zmq.Host,
-	// 	Port: config.GetEConfig().Zmq.Port,
-	// }
-	// pub.Init()
 	return &Detector{
 		Queue: &queue.InnerChanTaskQueue{
 			Ch: ch,

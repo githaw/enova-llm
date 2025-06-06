@@ -11,7 +11,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/open-telemetry/opentelemetry-operator v0.108.0
-	github.com/pebbe/zmq4 v1.2.11
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/swaggo/swag v1.8.12
