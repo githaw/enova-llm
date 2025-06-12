@@ -294,8 +294,11 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		resources.Limits[corev1.ResourceMemory] = q
 	}
 
-	resources.Requests[corev1.ResourceName("nvidia.com/gpu")] = k8sresource.MustParse(w.Spec.Resources.GPU)
-	resources.Limits[corev1.ResourceName("nvidia.com/gpu")] = k8sresource.MustParse(w.Spec.Resources.GPU)
+	if w.Spec.Resources.GPU != "" {
+		q := k8sresource.MustParse(w.Spec.Resources.GPU)
+		resources.Requests[corev1.ResourceName("nvidia.com/gpu")] = q
+		resources.Limits[corev1.ResourceName("nvidia.com/gpu")] = q
+	}
 
 	// default mount ~/.cache to host data disk
 	deployment := v1.Deployment{
