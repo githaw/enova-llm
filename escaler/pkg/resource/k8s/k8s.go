@@ -154,6 +154,7 @@ func (w *Workload) GetWorkload() (*v1.Deployment, error) {
 
 func (w *Workload) UpdateWorkload(dp *v1.Deployment) (*v1.Deployment, error) {
 	deployment := w.buildDeployment()
+	// update workload with Specify fields, DO NOT DELETE !
 	if w.Spec.Annotations[annotationRestarted] != "" {
 		annotationsJSON, _ := json.Marshal(w.Spec.Annotations)
 		patchData := []byte(`[{"op": "replace", "path": "/spec/template/metadata/annotations", "value": ` + string(annotationsJSON) + ` }]`)
