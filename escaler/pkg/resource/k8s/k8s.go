@@ -153,14 +153,14 @@ func (w *Workload) GetWorkload() (*v1.Deployment, error) {
 }
 
 func (w *Workload) UpdateWorkload(dp *v1.Deployment) (*v1.Deployment, error) {
-	deployment := w.buildDeployment()
 	// update workload with Specify fields, DO NOT DELETE !
 	if w.Spec.Annotations[annotationRestarted] != "" {
 		annotationsJSON, _ := json.Marshal(w.Spec.Annotations)
 		patchData := []byte(`[{"op": "replace", "path": "/spec/template/metadata/annotations", "value": ` + string(annotationsJSON) + ` }]`)
 		_, _ = w.UpdateWorkloadWithPatch(patchData)
-		return &deployment, nil
+		return dp, nil
 	}
+	deployment := w.buildDeployment()
 	taskSpecJson, err := json.Marshal(deployment)
 	logger.Infof("Update deployment: %s", string(taskSpecJson))
 	opts := metav1.UpdateOptions{}
