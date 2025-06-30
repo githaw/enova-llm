@@ -213,6 +213,9 @@ func (w *Workload) CreateService() (*corev1.Service, error) {
 }
 
 func (w *Workload) UpdateService() (*corev1.Service, error) {
+	if w.Spec.Annotations[annotationRestarted] != "" {
+		return &corev1.Service{}, nil
+	}
 	opts := metav1.UpdateOptions{}
 	service := w.buildService()
 	ret, err := w.K8sCli.K8sClient.CoreV1().Services(w.Spec.Namespace).Update(w.K8sCli.Ctx, &service, opts)
