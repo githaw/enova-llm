@@ -1,9 +1,9 @@
+import re
 import sys
 import click
 
 from enova.common.cli_helper import ArgumentHelper, parse_extra_args
 from enova.common.config import CONFIG
-from enova.common.constant import ServingBackend
 from enova.entry.command.webui import Webui
 from enova.serving.apiserver import EApiServer
 
@@ -49,7 +49,9 @@ class EnovaServing:
         llmo_start(otlp_exporter_endpoint=exporter_endpoint, service_name=exporter_service_name)
         if include_webui:
             Webui().run(daemon=False)
-        ServingHandler(host, port, model, backend).start()
+        from vllm.entrypoints.cli.main import main
+        sys.argv = ["vllm", "serve"] + sys.argv[3:]
+        sys.exit(main())
 
 
 pass_enova_serving = click.make_pass_decorator(EnovaServing)
