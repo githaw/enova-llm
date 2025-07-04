@@ -26,7 +26,7 @@ tzlocal
 openai
 packaging
 ray
-enova-instrumentation-llmo==0.0.9
+enova-instrumentation-llmo==0.1.0
 addict
 sglang==0.3.6
 python-multipart
