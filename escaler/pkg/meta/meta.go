@@ -87,7 +87,6 @@ type DeployRequest struct {
 	Volumes             []Volume          `json:"volumes"`
 	Namespace           string            `json:"namespace"`
 	NodeSelector        map[string]string `json:"node_selector"`
-	Ingress             Ingress           `json:"ingress"`
 	Service             Service           `json:"service"`
 	Resources           Resources         `json:"resources"`
 	ScalingStrategy     ScalingStrategy   `json:"scaling_strategy"`
@@ -100,18 +99,19 @@ type Env struct {
 }
 
 type Volume struct {
-	MountPath string `json:"mountPath"`
-	HostPath  string `json:"hostPath"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
+	Path  string `json:"path"`
+	Type  string `json:"type"`
+}
+
+type VolumeMount struct {
+	Name     string `json:"name" protobuf:"bytes,1,opt,name=name"`
+	Path     string `json:"path" protobuf:"bytes,2,opt,name=path"`
+	ReadOnly bool   `json:"readOnly" protobuf:"varint,3,opt,name=readOnly"`
 }
 
 type Raw struct{}
-
-type Ingress struct {
-	Name        string            `json:"name"`
-	Paths       []Path            `json:"paths"`
-	Raw         Raw               `json:"raw"`
-	Annotations map[string]string `json:"annotations"`
-}
 
 type Path struct {
 	Path    string  `json:"path"`
@@ -138,7 +138,10 @@ type Service struct {
 }
 
 type Resources struct {
+	CPU     string `json:"cpu"`
 	GPU     string `json:"gpu"`
+	Memory  string `json:"memory"`
+	CPUType string `json:"cpu_type"`
 	GPUType string `json:"gpu_type"`
 }
 
@@ -167,12 +170,20 @@ type CollectorConfig struct {
 	CustomMetricsAdd map[string]string
 }
 
+type ConfigMap struct {
+	Name string `json:"name"` // ConfigMap name
+	Path string `json:"path"` // ConfigMap path
+	Type string `json:"type"` // reserve
+}
+
 type TaskSpec struct {
 	Name                string            `json:"name"`
+	Annotations         map[string]string `json:"annotations"`
 	Model               string            `json:"model"`
 	Host                string            `json:"host"`
 	Port                int               `json:"port"`
 	Image               string            `json:"image"`
+	ImagePullSecrets    []string          `json:"image_pull_secrets"`
 	Backend             string            `json:"backend"`
 	ExporterEndpoint    string            `json:"exporter_endpoint"`
 	ExporterServiceName string            `json:"exporter_service_name"`
@@ -185,13 +196,14 @@ type TaskSpec struct {
 	Envs                []Env             `json:"envs"`
 	Gpus                string            `json:"gpus"`
 	Volumes             []Volume          `json:"volumes"`
+	VolumeMounts        []VolumeMount     `json:"volume_mounts"`
 	Namespace           string            `json:"namespace"`
 	NodeSelector        map[string]string `json:"node_selector"`
-	Ingress             Ingress           `json:"ingress"`
 	Service             Service           `json:"service"`
 	Resources           Resources         `json:"resources"`
 	ScalingStrategy     ScalingStrategy   `json:"scaling_strategy"`
 	Collector           CollectorConfig   `json:"collector"`
+	ConfigMaps          []ConfigMap       `json:"config_maps"`
 }
 
 func (t *TaskSpec) GetName() string {
@@ -257,7 +269,6 @@ func (t *TaskSpec) UnmarshalJSON(data []byte) error {
 		Volumes             []Volume          `json:"volumes"`
 		Namespace           string            `json:"namespace"`
 		NodeSelector        map[string]string `json:"node_selector"`
-		Ingress             Ingress           `json:"ingress"`
 		Service             Service           `json:"service"`
 		Resources           Resources         `json:"resources"`
 		ScalingStrategy     ScalingStrategy   `json:"scaling_strategy"`
@@ -305,7 +316,6 @@ func (t *TaskSpec) UnmarshalJSON(data []byte) error {
 		Volumes:             aux.Volumes,
 		Namespace:           aux.Namespace,
 		NodeSelector:        aux.NodeSelector,
-		Ingress:             aux.Ingress,
 		Service:             aux.Service,
 		Resources:           aux.Resources,
 		ScalingStrategy:     aux.ScalingStrategy,

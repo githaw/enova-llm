@@ -12,4 +12,3 @@ func GetAllField(s interface{}) []reflect.StructField {
 	}
 	return ret
 }
- 

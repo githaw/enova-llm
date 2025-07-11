@@ -1,6 +1,6 @@
 httpx==0.24.1
-fastapi==0.108.0
-vllm==0.6.3.post1
+fastapi==0.115.0
+vllm==0.8.5.post1
 sglang==0.3.6
 huggingface_hub
 hf-transfer
@@ -27,7 +27,7 @@ pytz
 tzlocal
 openai
 packaging
-ray
+# ray
 python-multipart
 addict
 orjson

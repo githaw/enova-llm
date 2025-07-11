@@ -9,11 +9,9 @@ import (
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/logger"
-	"github.com/Emerging-AI/ENOVA/escaler/pkg/zmq"
 )
 
 type EnovaServingScaler struct {
-	// Subscriber *zmq.ZmqSubscriber
 	Queue   *queue.InnerChanTaskQueue
 	Client  resource.ClientInterface
 	stopped bool
@@ -43,15 +41,6 @@ func NewK8sServingScaler(ch chan meta.TaskSpecInterface) *EnovaServingScaler {
 		},
 		Client: resource.NewK8sResourceClient(),
 	}
-}
-
-func NewZmqSubscriber() *zmq.ZmqSubscriber {
-	sub := zmq.ZmqSubscriber{
-		Host: config.GetEConfig().Zmq.Host,
-		Port: config.GetEConfig().Zmq.Port,
-	}
-	sub.Init()
-	return &sub
 }
 
 func (s *EnovaServingScaler) Run() {

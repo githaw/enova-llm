@@ -2,25 +2,24 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
+	"strings"
 
-	"github.com/Emerging-AI/ENOVA/escaler/pkg/config"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/remotecommand"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	rscutils "github.com/Emerging-AI/ENOVA/escaler/pkg/resource/utils"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/logger"
 	"github.com/Emerging-AI/ENOVA/escaler/pkg/meta"
-	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -31,6 +30,8 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
+
+const annotationRestarted = "restartedAt"
 
 var collectorServiceAccount = "otel-collector"
 
@@ -46,21 +47,20 @@ type Workload struct {
 }
 
 func (w *Workload) CreateOrUpdate() {
-	podList, err := w.GetPodsList()
+	dp, err := w.GetWorkload()
 	if err != nil {
-		logger.Errorf("K8sResourceClient DeployTask check GetPodsList get error: %v", err)
-		return
-	}
-	if len(podList.Items) == 0 {
-		logger.Debug("workload.GetPodsList get empty podlist")
-		_, err := w.CreateWorkload()
-		if err != nil {
-			return
+		if apierrors.IsNotFound(err) {
+			_, err := w.CreateWorkload()
+			if err != nil {
+				logger.Error(err, "Failed to create workload")
+				return
+			}
 		}
+		logger.Error(err, "workload GetWorkload failed")
 	} else {
-		logger.Debug("workload.GetPodsList get podlist")
-		_, err := w.UpdateWorkload()
+		_, err := w.UpdateWorkload(dp)
 		if err != nil {
+			logger.Error(err, "Failed to update workload")
 			return
 		}
 	}
@@ -79,29 +79,16 @@ func (w *Workload) CreateOrUpdate() {
 		}
 	}
 
-	_, err = w.GetIngress()
-	if err != nil {
-		logger.Debugf("K8sResourceClient DeployTask check ingress get error: %v", err)
-		_, err = w.CreateIngress()
-		if err != nil {
-			return
-		}
-	} else {
-		_, err = w.UpdateIngress()
-		if err != nil {
-			return
-		}
-	}
-
 	if w.Spec.Collector.Enable && !w.isCustomized() {
-		_, err = w.GetCollector()
+		// TODO:resourceVersion not found
+		ot, err := w.GetCollector()
 		if err != nil {
 			_, err = w.CreateCollector()
 			if err != nil {
 				return
 			}
 		} else {
-			_, err = w.UpdateCollector()
+			_, err = w.UpdateCollector(ot)
 			if err != nil {
 				return
 			}
@@ -109,7 +96,7 @@ func (w *Workload) CreateOrUpdate() {
 	}
 }
 
-// Create 1. create workload, 2. create ingress 3. create service
+// Create 1. create workload, 2. create service
 func (w *Workload) Create() {
 	_, err := w.CreateWorkload()
 	if err != nil {
@@ -119,14 +106,14 @@ func (w *Workload) Create() {
 	if err != nil {
 		return
 	}
-	_, err = w.CreateIngress()
-	if err != nil {
-		return
-	}
 }
 
 func (w *Workload) Update() {
-	_, err := w.UpdateWorkload()
+	dp, err := w.GetWorkload()
+	if err != nil {
+		return
+	}
+	_, err = w.UpdateWorkload(dp)
 	if err != nil {
 		return
 	}
@@ -134,21 +121,18 @@ func (w *Workload) Update() {
 	if err != nil {
 		return
 	}
-	_, err = w.UpdateIngress()
-	if err != nil {
-		return
-	}
 }
 
 func (w *Workload) Delete() {
-	w.DeleteWorkload()
-	w.DeleteService()
-	w.DeleteIngress()
-	w.DeleteCollector()
+	_ = w.DeleteWorkload()
+	_ = w.DeleteService()
+	_ = w.DeleteCollector()
 }
 
 func (w *Workload) CreateWorkload() (*v1.Deployment, error) {
 	deployment := w.buildDeployment()
+	taskSpecJson, err := json.Marshal(deployment)
+	logger.Infof("Create deployment: %s", string(taskSpecJson))
 	opts := metav1.CreateOptions{}
 	ret, err := w.K8sCli.K8sClient.AppsV1().Deployments(w.Spec.Namespace).Create(w.K8sCli.Ctx, &deployment, opts)
 	if err != nil {
@@ -158,10 +142,50 @@ func (w *Workload) CreateWorkload() (*v1.Deployment, error) {
 	return ret, nil
 }
 
-func (w *Workload) UpdateWorkload() (*v1.Deployment, error) {
+func (w *Workload) GetWorkload() (*v1.Deployment, error) {
 	deployment := w.buildDeployment()
+	ret, err := w.K8sCli.K8sClient.AppsV1().Deployments(w.Spec.Namespace).Get(w.K8sCli.Ctx, deployment.Name, metav1.GetOptions{})
+	if err != nil {
+		logger.Errorf("Workload GetWorkload error: %v", err)
+		return ret, err
+	}
+	return ret, nil
+}
+
+func (w *Workload) UpdateWorkload(dp *v1.Deployment) (*v1.Deployment, error) {
+	// update workload with Specify fields, DO NOT DELETE !
+	if w.Spec.Annotations[annotationRestarted] != "" {
+		annotationsJSON, _ := json.Marshal(w.Spec.Annotations)
+		patchData := []byte(`[{"op": "replace", "path": "/spec/template/metadata/annotations", "value": ` + string(annotationsJSON) + ` }]`)
+		_, _ = w.UpdateWorkloadWithPatch(patchData)
+		return dp, nil
+	}
+	deployment := w.buildDeployment()
+	taskSpecJson, err := json.Marshal(deployment)
+	logger.Infof("Update deployment: %s", string(taskSpecJson))
 	opts := metav1.UpdateOptions{}
+	deployment.ResourceVersion = dp.ResourceVersion
 	ret, err := w.K8sCli.K8sClient.AppsV1().Deployments(w.Spec.Namespace).Update(w.K8sCli.Ctx, &deployment, opts)
+	if err != nil {
+		logger.Errorf("Workload UpdateWorkload error: %v", err)
+		return ret, err
+	}
+	return ret, nil
+}
+
+func (w *Workload) UpdateWorkloadWithPatch(patchData []byte) (*v1.Deployment, error) {
+	dp, err := w.GetWorkload()
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err := w.K8sCli.K8sClient.AppsV1().Deployments(w.Spec.Namespace).Patch(
+		w.K8sCli.Ctx,
+		dp.Name,
+		types.JSONPatchType,
+		patchData,
+		metav1.PatchOptions{},
+	)
 	if err != nil {
 		logger.Errorf("Workload UpdateWorkload error: %v", err)
 		return ret, err
@@ -177,17 +201,6 @@ func (w *Workload) DeleteWorkload() error {
 	return nil
 }
 
-func (w *Workload) CreateIngress() (*networkingv1.Ingress, error) {
-	opts := metav1.CreateOptions{}
-	ingress := w.buildIngress()
-	ret, err := w.K8sCli.K8sClient.NetworkingV1().Ingresses(w.Spec.Namespace).Create(w.K8sCli.Ctx, &ingress, opts)
-	if err != nil {
-		logger.Errorf("Workload CreateIngress error: %v", err)
-		return ret, err
-	}
-	return ret, nil
-}
-
 func (w *Workload) CreateService() (*corev1.Service, error) {
 	opts := metav1.CreateOptions{}
 	service := w.buildService()
@@ -199,18 +212,10 @@ func (w *Workload) CreateService() (*corev1.Service, error) {
 	return ret, nil
 }
 
-func (w *Workload) UpdateIngress() (*networkingv1.Ingress, error) {
-	opts := metav1.UpdateOptions{}
-	ingress := w.buildIngress()
-	ret, err := w.K8sCli.K8sClient.NetworkingV1().Ingresses(w.Spec.Namespace).Update(w.K8sCli.Ctx, &ingress, opts)
-	if err != nil {
-		logger.Errorf("Workload UpdateIngress error: %v", err)
-		return ret, err
-	}
-	return ret, nil
-}
-
 func (w *Workload) UpdateService() (*corev1.Service, error) {
+	if w.Spec.Annotations[annotationRestarted] != "" {
+		return &corev1.Service{}, nil
+	}
 	opts := metav1.UpdateOptions{}
 	service := w.buildService()
 	ret, err := w.K8sCli.K8sClient.CoreV1().Services(w.Spec.Namespace).Update(w.K8sCli.Ctx, &service, opts)
@@ -221,14 +226,6 @@ func (w *Workload) UpdateService() (*corev1.Service, error) {
 	return ret, nil
 }
 
-func (w *Workload) DeleteIngress() error {
-	if err := w.K8sCli.K8sClient.NetworkingV1().Ingresses(w.Spec.Namespace).Delete(w.K8sCli.Ctx, w.buildIngress().Name, metav1.DeleteOptions{}); client.IgnoreNotFound(err) != nil {
-		logger.Errorf("Workload DeleteIngress error: %v", err)
-		return err
-	}
-	return nil
-}
-
 func (w *Workload) DeleteService() error {
 	if err := w.K8sCli.K8sClient.CoreV1().Services(w.Spec.Namespace).Delete(w.K8sCli.Ctx, w.buildService().Name, metav1.DeleteOptions{}); client.IgnoreNotFound(err) != nil {
 		logger.Errorf("Workload DeleteService error: %v", err)
@@ -237,19 +234,21 @@ func (w *Workload) DeleteService() error {
 	return nil
 }
 
+func (w *Workload) GetConfigMap(name string) (*corev1.ConfigMap, error) {
+	ret, err := w.K8sCli.K8sClient.CoreV1().ConfigMaps(w.Spec.Namespace).Get(w.K8sCli.Ctx, name, metav1.GetOptions{})
+	if err != nil {
+		logger.Errorf("Workload GetConfigMap error: %v", err)
+		return ret, err
+	}
+	return ret, nil
+}
+
 func (w *Workload) buildDeployment() v1.Deployment {
 	replicas := int32(w.Spec.Replica)
 	matchLabels := make(map[string]string)
 	matchLabels["enovaserving-name"] = w.Spec.Name
 	matchLabels["app"] = w.Spec.Name
 	matchLabels["version"] = "v1.0.0"
-	cmd := make([]string, 0)
-	if len(w.Spec.Command) > 0 {
-		cmd = append(cmd, w.Spec.Command...)
-		cmd = append(cmd, w.Spec.Args...)
-	} else {
-		cmd = rscutils.BuildCmdFromTaskSpec(*w.Spec)
-	}
 
 	env := make([]corev1.EnvVar, len(w.Spec.Envs))
 	for i, e := range w.Spec.Envs {
@@ -259,12 +258,21 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		}
 	}
 
+	// imagePullSecrets
+	var imagePullSecrets []corev1.LocalObjectReference
+	for _, s := range w.Spec.ImagePullSecrets {
+		if s != "" {
+			imagePullSecrets = append(imagePullSecrets, corev1.LocalObjectReference{Name: s})
+		}
+	}
+
 	livenessProbe := corev1.Probe{}
 	readinessProbe := corev1.Probe{}
 	probe := corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/health",
 		Port: intstr.IntOrString{IntVal: int32(w.Spec.Port)}}}, InitialDelaySeconds: 30}
 	switch w.Spec.Backend {
 	case "vllm", "sglang":
+		// TODO: custom health
 		if !w.isCustomized() {
 			livenessProbe = probe
 			livenessProbe.FailureThreshold = 3
@@ -277,12 +285,38 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		}
 	}
 
+	// cpu,memory request & limit
+	resources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{},
+		Limits:   corev1.ResourceList{},
+	}
+
+	// cpu,memory request & limit
+	if w.Spec.Resources.CPU != "" {
+		q := k8sresource.MustParse(w.Spec.Resources.CPU)
+		resources.Requests[corev1.ResourceCPU] = q
+		resources.Limits[corev1.ResourceCPU] = q
+	}
+
+	if w.Spec.Resources.Memory != "" {
+		q := k8sresource.MustParse(w.Spec.Resources.Memory)
+		resources.Requests[corev1.ResourceMemory] = q
+		resources.Limits[corev1.ResourceMemory] = q
+	}
+
+	if w.Spec.Resources.GPU != "" {
+		q := k8sresource.MustParse(w.Spec.Resources.GPU)
+		resources.Requests[corev1.ResourceName("nvidia.com/gpu")] = q
+		resources.Limits[corev1.ResourceName("nvidia.com/gpu")] = q
+	}
+
 	// default mount ~/.cache to host data disk
 	deployment := v1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      w.Spec.Name,
-			Namespace: w.Spec.Namespace,
-			Labels:    matchLabels,
+			Name:        w.Spec.Name,
+			Namespace:   w.Spec.Namespace,
+			Labels:      matchLabels,
+			Annotations: w.Spec.Annotations,
 		},
 		Spec: v1.DeploymentSpec{
 			Replicas: &replicas,
@@ -296,42 +330,68 @@ func (w *Workload) buildDeployment() v1.Deployment {
 							Image:           w.Spec.Image,
 							ImagePullPolicy: corev1.PullAlways,
 							Name:            w.Spec.Name,
-							Command:         cmd[:1],
-							Args:            cmd[1:],
-							LivenessProbe:   &livenessProbe,
-							ReadinessProbe:  &readinessProbe,
 							Ports: []corev1.ContainerPort{
 								{
 									ContainerPort: int32(w.Spec.Port),
 									Protocol:      corev1.ProtocolTCP,
 								},
 							},
-							Env: env,
+							Env:       env,
+							Resources: resources,
 						},
 					},
+					ImagePullSecrets: imagePullSecrets,
 				},
 			},
 		},
 	}
-	volumes := make([]corev1.Volume, len(w.Spec.Volumes))
-	volumeMounts := make([]corev1.VolumeMount, len(w.Spec.Volumes))
-	if len(w.Spec.Volumes) > 0 {
-		for i, v := range w.Spec.Volumes {
-			volumes[i] = corev1.Volume{
-				VolumeSource: corev1.VolumeSource{
-					HostPath: &corev1.HostPathVolumeSource{
-						Path: v.HostPath,
-					},
-				},
-				Name: fmt.Sprintf("hostpath%d", i),
-			}
-			volumeMounts[i] = corev1.VolumeMount{
-				Name:      fmt.Sprintf("hostpath%d", i),
-				MountPath: v.MountPath,
-			}
+
+	if w.isCustomized() {
+		if len(w.Spec.Command) > 0 {
+			deployment.Spec.Template.Spec.Containers[0].Command = w.Spec.Command
+			deployment.Spec.Template.Spec.Containers[0].Args = w.Spec.Args
 		}
+	} else {
+		cmd := rscutils.BuildCmdFromTaskSpec(*w.Spec)
+		deployment.Spec.Template.Spec.Containers[0].Command = cmd[:1]
+		deployment.Spec.Template.Spec.Containers[0].Args = cmd[1:]
 	}
-	// if will add shm by default
+
+	deployment.Spec.Template.Annotations = w.Spec.Annotations
+	volumes := make([]corev1.Volume, 0)
+	volumeMounts := make([]corev1.VolumeMount, 0)
+
+	for _, v := range w.Spec.Volumes {
+		volumeSource := corev1.VolumeSource{}
+		switch v.Type {
+		case "emptyDir":
+			volumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
+			break
+		case "hostPath":
+			volumeSource.HostPath = &corev1.HostPathVolumeSource{Path: v.Path}
+			break
+		case "NFS":
+			volumeSource.NFS = &corev1.NFSVolumeSource{Server: v.Value, Path: v.Path}
+			break
+		default:
+			continue
+		}
+		volumes = append(volumes, corev1.Volume{Name: v.Name, VolumeSource: volumeSource})
+	}
+
+	for _, v := range w.Spec.VolumeMounts {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      v.Name,
+			MountPath: v.Path,
+			ReadOnly:  v.ReadOnly,
+		})
+	}
+
+	if !w.isCustomized() {
+		deployment.Spec.Template.Spec.Containers[0].ReadinessProbe = &readinessProbe
+		deployment.Spec.Template.Spec.Containers[0].LivenessProbe = &livenessProbe
+	}
+	// it will add shm by default
 	shmLimitSize := k8sresource.MustParse("1Gi")
 	volumes = append(volumes, corev1.Volume{
 		VolumeSource: corev1.VolumeSource{
@@ -346,19 +406,37 @@ func (w *Workload) buildDeployment() v1.Deployment {
 		Name:      "shm",
 		MountPath: "/dev/shm",
 	})
+
+	// ConfigMaps
+	for _, v := range w.Spec.ConfigMaps {
+		if configMap, err := w.GetConfigMap(v.Name); err == nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: configMap.Name,
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: configMap.Name},
+					},
+				},
+			})
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      configMap.Name,
+				MountPath: v.Path,
+			})
+		}
+	}
+
+	maxUnavailable := intstr.FromString("25%")
+	maxSurge := intstr.FromString("0%")
+	deployment.Spec.Strategy = v1.DeploymentStrategy{
+		Type:          v1.RollingUpdateDeploymentStrategyType,
+		RollingUpdate: &v1.RollingUpdateDeployment{MaxUnavailable: &maxUnavailable, MaxSurge: &maxSurge},
+	}
 	deployment.Spec.Template.Spec.Volumes = volumes
 	deployment.Spec.Template.Spec.Containers[0].VolumeMounts = volumeMounts
 	if len(w.Spec.NodeSelector) > 0 {
 		deployment.Spec.Template.Spec.NodeSelector = w.Spec.NodeSelector
 	}
 
-	request := corev1.ResourceList{
-		corev1.ResourceName("nvidia.com/gpu"): k8sresource.MustParse(w.Spec.Resources.GPU),
-	}
-	deployment.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{
-		Limits:   request,
-		Requests: request,
-	}
 	deployment.Spec.Template.Labels = matchLabels
 	deployment.Labels = matchLabels
 	return deployment
@@ -388,45 +466,6 @@ func (w *Workload) buildService() corev1.Service {
 	service.Name = fmt.Sprintf("%s-svc", w.Spec.Name)
 	service.Namespace = w.Spec.Namespace
 	return service
-}
-
-func (w *Workload) buildIngress() networkingv1.Ingress {
-	ingressClsName := "nginx"
-	acutalPaths := make([]networkingv1.HTTPIngressPath, len(w.Spec.Ingress.Paths))
-	rules := make([]networkingv1.IngressRule, 1)
-
-	for i, p := range w.Spec.Ingress.Paths {
-		pathType := networkingv1.PathTypePrefix
-
-		acutalPaths[i] = networkingv1.HTTPIngressPath{
-			Path:     p.Path,
-			PathType: &pathType,
-			Backend: networkingv1.IngressBackend{
-				Service: &networkingv1.IngressServiceBackend{
-					Name: fmt.Sprintf("%s-svc", w.Spec.Name),
-					Port: networkingv1.ServiceBackendPort{
-						Number: p.Backend.Service.Port.Number,
-					},
-				},
-			},
-		}
-	}
-	rules[0] = networkingv1.IngressRule{
-		IngressRuleValue: networkingv1.IngressRuleValue{
-			HTTP: &networkingv1.HTTPIngressRuleValue{
-				Paths: acutalPaths,
-			},
-		},
-	}
-	ingress := networkingv1.Ingress{
-		Spec: networkingv1.IngressSpec{
-			IngressClassName: &ingressClsName,
-			Rules:            rules,
-		},
-	}
-	ingress.Name = fmt.Sprintf("%s-ingress", w.Spec.Name)
-	ingress.Annotations = w.Spec.Ingress.Annotations
-	return ingress
 }
 
 func formatBrokers(brokers []string) string {
@@ -488,6 +527,18 @@ func (w *Workload) buildCollector() otalv1.OpenTelemetryCollector {
 			"transforms": []interface{}{
 				map[string]interface{}{
 					"action":     "update",
+					"include":    "^sglang:num_queue_reqs$$",
+					"match_type": "regexp",
+					"new_name":   "vllm_num_requests_waiting",
+				},
+				map[string]interface{}{
+					"action":     "update",
+					"include":    "^sglang:num_running_reqs$$",
+					"match_type": "regexp",
+					"new_name":   "vllm_num_requests_running",
+				},
+				map[string]interface{}{
+					"action":     "update",
 					"include":    "^sglang:(.*)$$",
 					"match_type": "regexp",
 					"new_name":   "vllm:$${1}]",
@@ -547,27 +598,16 @@ func (w *Workload) GetService() (*corev1.Service, error) {
 	return ret, nil
 }
 
-func (w *Workload) GetIngress() (*networkingv1.Ingress, error) {
-	opts := metav1.GetOptions{}
-	ingress := w.buildIngress()
-	ret, err := w.K8sCli.K8sClient.NetworkingV1().Ingresses(w.Spec.Namespace).Get(w.K8sCli.Ctx, ingress.Name, opts)
-	if err != nil {
-		logger.Errorf("Workload GetIngress error: %v", err)
-		return ret, err
-	}
-	return ret, nil
-}
-
-func (w *Workload) GetCollector() (otalv1.OpenTelemetryCollector, error) {
+func (w *Workload) GetCollector() (*otalv1.OpenTelemetryCollector, error) {
 	collector := otalv1.OpenTelemetryCollector{}
 	rsc := w.GetOtCollectorResource()
 	ret, err := rsc.Namespace(w.Spec.Namespace).Get(w.K8sCli.Ctx, w.Spec.Name, metav1.GetOptions{})
 	if err != nil {
 		logger.Errorf("GetCollector Get error: %v", err)
-		return collector, err
+		return &collector, err
 	}
 	_ = mapstructure.Decode(ret.Object, &collector)
-	return collector, err
+	return &collector, err
 }
 
 func (w *Workload) CreateCollector() (otalv1.OpenTelemetryCollector, error) {
@@ -593,10 +633,13 @@ func (w *Workload) DeleteCollector() error {
 	return nil
 }
 
-func (w *Workload) UpdateCollector() (otalv1.OpenTelemetryCollector, error) {
+func (w *Workload) UpdateCollector(ot *otalv1.OpenTelemetryCollector) (otalv1.OpenTelemetryCollector, error) {
 	collector := w.buildCollector()
 
 	obj := w.buildCollectorUnstructued(collector)
+	_ = unstructured.SetNestedField(obj.Object, ot.ResourceVersion, "metadata", "resourceVersion")
+
+	logger.Infof("Update Collector: %+v\n", obj.Object)
 
 	rsc := w.GetOtCollectorResource()
 	ret, err := rsc.Namespace(w.Spec.Namespace).Update(w.K8sCli.Ctx, &obj, metav1.UpdateOptions{})
@@ -678,49 +721,5 @@ func (w *Workload) GetOtCollectorResource() dynamic.NamespaceableResourceInterfa
 }
 
 func (w *Workload) isCustomized() bool {
-	return len(w.Spec.Command) > 0
-}
-
-func (w *Workload) InPlaceRestart(pod string, container string) error {
-
-	req := w.K8sCli.K8sClient.CoreV1().RESTClient().
-		Post().
-		Resource("pods").
-		Name(pod).
-		Namespace(w.Spec.Namespace).
-		SubResource("exec").
-		Param("container", container).
-		Param("command", "sh").
-		Param("command", "-c").
-		Param("command", "kill 1").
-		Param("stdin", "false").
-		Param("stdout", "true").
-		Param("stderr", "true").
-		Param("tty", "false")
-
-	// build SPDY connect
-	var conf *rest.Config
-	if config.GetEConfig().K8s.InCluster {
-		conf, _ = rest.InClusterConfig()
-	}
-	conf, _ = clientcmd.BuildConfigFromFlags("", config.GetEConfig().K8s.KubeConfigPath)
-
-	exec, err := remotecommand.NewSPDYExecutor(conf, http.MethodPost, req.URL())
-	if err != nil {
-		log.Fatalf("Failed to create SPDY executor: %v", err)
-		return err
-	}
-
-	// execute the command
-	err = exec.Stream(remotecommand.StreamOptions{
-		Stdout: log.Writer(),
-		Stderr: log.Writer(),
-	})
-	if err != nil {
-		log.Fatalf("Failed to execute command: %v", err)
-		return err
-	}
-
-	log.Println("Container restart triggered successfully!")
-	return nil
+	return !strings.HasSuffix(strings.Split(w.Spec.Image, ":")[0], "/enova")
 }
