@@ -33,6 +33,7 @@ python-multipart
 addict
 orjson
 siphash24
+uvloop
 # msgspec
 # compressed_tensors
 # gguf
