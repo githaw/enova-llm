@@ -7,8 +7,8 @@ COPY ./scripts /opt/enova/scripts
 
 RUN bash /opt/enova/scripts/pack_whl.llmo.sh 
 
-ARG LLMO_VERSION=0.1.0
-RUN pip install /opt/enova/llmo/enova-instrumentation-llmo/dist/enova_instrumentation_llmo-${LLMO_VERSION}-py3-none-any.whl --no-deps --no-cache-dir
+# ARG LLMO_VERSION=0.1.0
+# RUN pip install /opt/enova/llmo/enova-instrumentation-llmo/dist/enova_instrumentation_llmo-${LLMO_VERSION}-py3-none-any.whl --no-deps --no-cache-dir
 
 ARG CACHEBUST=1
 
