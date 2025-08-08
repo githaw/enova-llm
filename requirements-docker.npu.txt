@@ -35,6 +35,7 @@ orjson
 siphash24
 uvloop
 qwen-vl-utils
+watchfiles
 # msgspec
 # compressed_tensors
 # gguf
