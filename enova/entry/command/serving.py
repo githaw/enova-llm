@@ -46,10 +46,12 @@ class EnovaServing:
 
         CONFIG.update_config({backend: kwargs})
         CONFIG.print_config()
-        llmo_start(otlp_exporter_endpoint=exporter_endpoint, service_name=exporter_service_name)
+        if kwargs.get("llmo"):
+            llmo_start(otlp_exporter_endpoint=exporter_endpoint, service_name=exporter_service_name)
         if include_webui:
             Webui().run(daemon=False)
         from vllm.entrypoints.cli.main import main
+
         sys.argv = ["vllm", "serve"] + sys.argv[3:]
         sys.exit(main())
 
