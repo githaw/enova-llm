@@ -11,7 +11,6 @@ from typing import Union
 
 import cpuinfo
 import psutil
-import pyopencl as cl
 import ulid
 
 from enova.common.config import CONFIG
@@ -257,6 +256,8 @@ class DiskSize:
 
 
 def get_machine_spec():
+    import pyopencl as cl
+
     machine_spec = {}
 
     # gpu

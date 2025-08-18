@@ -17,7 +17,7 @@ if [ ! -f "$DOCKER_COMPOSE_BIN" ]; then
 
     echo "docker-compose binary $DOCKER_COMPOSE_BIN is not existed, start to download..."
     cd enova/template/deployment/docker-compose/bin/
-    wget "$DOWNLOAD_URL"
+    wget -q "$DOWNLOAD_URL"
 
     chmod +x docker-compose-linux-x86_64
     cd $BASEDIR

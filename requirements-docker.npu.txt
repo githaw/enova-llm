@@ -1,0 +1,59 @@
+httpx==0.24.1
+fastapi==0.108.0
+vllm==0.9.0
+vllm-ascend==v0.9.0rc2
+# sglang==0.3.6
+huggingface_hub
+hf-transfer
+transformers==4.51.1
+locate
+python-rapidjson
+opentelemetry-api==1.36.0
+opentelemetry-sdk==1.36.0
+opentelemetry-exporter-otlp==1.36.0
+opentelemetry-distro
+opentelemetry-instrumentation-fastapi
+streamlit
+pymysql==1.1.0
+aiomysql==0.2.0
+sqlalchemy==2.0.29
+sqlalchemy-utils
+aiosqlite
+greenlet
+uvicorn
+ulid-py
+# pyopencl
+py-cpuinfo
+pytz
+tzlocal
+openai
+packaging
+ray
+python-multipart
+addict
+orjson
+siphash24
+uvloop
+qwen-vl-utils
+watchfiles
+# msgspec
+# compressed_tensors
+# gguf
+# sentencepiece
+# mistral_common
+
+# filelock
+# lm-format-enforcer==0.10.3
+# ninja
+# nvidia-ml-py
+# outlines
+# pillow
+# prometheus-client
+# prometheus-fastapi-instrumentator
+# psutil
+# sentencepiece
+# tiktoken
+# tokenizers
+# typing-extensions
+# vllm-flash-attn==2.5.9.post1
+# xformers==0.0.27

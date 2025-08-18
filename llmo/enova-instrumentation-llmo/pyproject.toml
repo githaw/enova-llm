@@ -17,7 +17,7 @@ branch = true
 source = [ "enova/llmo" ]
 
 [build-system]
-requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2,<=7.1.0", "toml"]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2,<9", "toml"]
 
 [tool.poetry]
 name = "enova-instrumentation-llmo"
